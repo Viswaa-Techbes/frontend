@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+import BrandLogo from '@/components/BrandLogo';
+
 export default function Sidebar() {
   const pathname = usePathname();
   const [isSalesExpanded, setIsSalesExpanded] = useState(false);
@@ -34,16 +36,11 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col h-screen fixed left-0 top-0 z-30 select-none">
+    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col h-screen fixed left-0 top-0 z-30 select-none print:hidden">
       {/* Brand Header */}
       <div className="h-16 flex items-center px-6 border-b border-slate-200 bg-white">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center font-extrabold text-white shadow-md shadow-blue-500/20 text-base">
-            TB
-          </div>
-          <span className="text-lg font-bold tracking-tight text-brand-navy">
-            TechBes <span className="text-brand-primary font-medium">Billing</span>
-          </span>
+        <Link href="/dashboard" className="block w-full">
+          <BrandLogo />
         </Link>
       </div>
 

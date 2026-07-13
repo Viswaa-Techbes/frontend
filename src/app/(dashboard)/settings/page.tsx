@@ -112,9 +112,13 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check size limit (e.g. 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      showToast('Image file size must be less than 2MB', 'error');
+    // Check size limits
+    if (type === 'signature' && file.size > 1 * 1024 * 1024) {
+      showToast('Signature file size must be less than 1MB', 'error');
+      return;
+    }
+    if (type === 'logo' && file.size > 2 * 1024 * 1024) {
+      showToast('Logo file size must be less than 2MB', 'error');
       return;
     }
 

@@ -379,8 +379,13 @@ export default function NewPaymentReceiptPage() {
     if (!files || files.length === 0) return;
     const file = files[0];
 
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('Attachment files must be smaller than 5MB.', 'error');
+    if (attachments.length >= 3) {
+      showToast('Maximum 3 attachments are allowed per document.', 'error');
+      return;
+    }
+
+    if (file.size > 3 * 1024 * 1024) {
+      showToast('Attachment file size must be less than 3MB.', 'error');
       return;
     }
 

@@ -6,6 +6,8 @@ import { useToast } from '@/context/ToastContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+import BrandLogo from '@/components/BrandLogo';
+
 export default function RegisterPage() {
   const { user, register, loading } = useAuth();
   const { showToast } = useToast();
@@ -60,11 +62,14 @@ export default function RegisterPage() {
       <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-[400px] h-[400px] bg-purple-500/10 rounded-full blur-[100px] pointer-events-none" />
 
       <div className="max-w-md w-full space-y-8 animate-slideUp">
-        <div className="text-center">
+        <div className="text-center flex flex-col items-center justify-center">
+          <div className="mb-6 bg-white px-4 py-2.5 rounded-xl border border-slate-800 shadow-sm flex items-center justify-center">
+            <BrandLogo />
+          </div>
           <h2 className="text-4xl font-extrabold tracking-tight text-white mb-2">
             Create <span className="text-gradient font-black">Account</span>
           </h2>
-          <p className="text-slate-400 text-sm">
+          <p className="text-slate-450 text-xs">
             Sign up to start managing your billing operations
           </p>
         </div>

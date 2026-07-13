@@ -41,7 +41,7 @@ export default function Topbar() {
   }, []);
 
   return (
-    <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-20 w-full select-none">
+    <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-20 w-full select-none print:hidden">
       {/* Left Area: Breadcrumbs & Search */}
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-1.5">

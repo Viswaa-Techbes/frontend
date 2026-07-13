@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import BrandLogo from '@/components/BrandLogo';
 
 export default function Home() {
   return (
@@ -10,13 +11,8 @@ export default function Home() {
 
       {/* Header */}
       <header className="max-w-7xl mx-auto w-full px-6 h-20 flex items-center justify-between z-10">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white shadow-md shadow-indigo-500/20">
-            TB
-          </div>
-          <span className="text-xl font-bold tracking-tight text-white">
-            TechBes<span className="text-indigo-400 font-medium">Billing</span>
-          </span>
+        <div className="bg-white px-3 py-1.5 rounded-lg shadow-sm border border-slate-800 flex items-center justify-center">
+          <BrandLogo />
         </div>
         <div className="flex items-center gap-4">
           <Link

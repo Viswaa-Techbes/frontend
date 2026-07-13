@@ -308,7 +308,21 @@ export default function NewQuotationPage() {
   const handleAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    Array.from(files).forEach((file) => {
+    
+    const incomingFiles = Array.from(files);
+    if (attachments.length + incomingFiles.length > 3) {
+      showToast('Maximum 3 attachments are allowed per document.', 'error');
+      return;
+    }
+
+    for (const file of incomingFiles) {
+      if (file.size > 3 * 1024 * 1024) {
+        showToast(`Attachment ${file.name} size exceeds 3MB limit.`, 'error');
+        return;
+      }
+    }
+
+    incomingFiles.forEach((file) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         setAttachments((prev) => [...prev, { name: file.name, base64: reader.result as string }]);
