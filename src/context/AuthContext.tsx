@@ -35,10 +35,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setToken(storedToken);
           const response = await api.get('/auth/me');
           if (response.data?.success) {
-            setUser(response.data.data);
+            setUser(response.data.data.user || response.data.data);
           } else {
             // fallback if response format is different
-            setUser(response.data);
+            setUser(response.data.user || response.data);
           }
         }
       } catch (err) {
