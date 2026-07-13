@@ -5,9 +5,9 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/lib/api';
 import { useToast } from '@/context/ToastContext';
-import PageHeader from '@/components/PageHeader';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import Modal from '@/components/ui/Modal';
+import PageHeader from '@/components/PageHeader';
 
 export default function QuotationDetailPage() {
   const router = useRouter();
@@ -16,22 +16,80 @@ export default function QuotationDetailPage() {
   const printRef = useRef<HTMLDivElement>(null);
 
   const [document, setDocument] = useState<any>(null);
+  const [businessProfile, setBusinessProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [savingSettings, setSavingSettings] = useState(false);
 
-  // Status transition state
-  const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [statusModalOpen, setStatusModalOpen] = useState(false);
-  const [targetStatus, setTargetStatus] = useState('');
+  // Settings panels accordions expanded states
+  const [expandedSection, setExpandedSection] = useState<string | null>('advanced');
+
+  // Modals States
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareForm, setShareForm] = useState({
+    recipientEmail: '',
+    cc: '',
+    subject: '',
+    message: '',
+  });
+
+  // Local customizations overrides that sync to db
+  const [localSettings, setLocalSettings] = useState<any>({
+    design: {
+      templateId: 'Professional',
+      primaryColor: '#2563eb',
+      fontFamily: 'Inter',
+      fontScale: 'Medium',
+      headerAlignment: 'Left',
+      logoPosition: 'Left',
+      tableStyle: 'Standard',
+      borderStyle: 'Horizontal',
+    },
+    advanced: {
+      hsnColumnView: 'HSN/SAC',
+      unitDisplay: 'Separate column',
+      taxSummaryDisplay: 'Summary',
+      hidePlaceOfSupply: false,
+      showHSNSummary: false,
+      showOriginalItemImages: false,
+      showThumbnailColumn: false,
+      showFullWidthDescription: false,
+      hideGroupSubtotal: false,
+      showSKU: false,
+      showSerialNumbers: false,
+      showBatchDetails: false,
+    },
+  });
 
   const fetchDocumentDetails = async () => {
-    setLoading(true);
     try {
       const response = await api.get(`/documents/${id}`);
-      if (response.data?.success) {
-        setDocument(response.data.data);
+      if (response.data?.success && response.data.data) {
+        const doc = response.data.data;
+        setDocument(doc);
+        
+        // Extract settings
+        if (doc.settings) {
+          setLocalSettings({
+            design: { ...(localSettings.design), ...(doc.settings.design || {}) },
+            advanced: { ...(localSettings.advanced), ...(doc.settings.advanced || {}) },
+          });
+        }
+
+        // CC share subject
+        setShareForm((prev) => ({
+          ...prev,
+          recipientEmail: doc.clientSnapshot?.email || '',
+          subject: `Quotation ${doc.documentNumber} from ${doc.businessSnapshot?.businessName || ''}`,
+          message: `Dear Client,\n\nPlease find attached Quotation ${doc.documentNumber} for your review. Let us know if you have any questions.\n\nBest Regards,\n${doc.businessSnapshot?.businessName || ''}`,
+        }));
+      }
+
+      const bizRes = await api.get('/business');
+      if (bizRes.data?.success) {
+        setBusinessProfile(bizRes.data.data.business);
       }
     } catch (err: any) {
-      showToast(err.response?.data?.message || 'Failed to retrieve quotation details.', 'error');
+      showToast(err.response?.data?.message || 'Failed to retrieve details.', 'error');
       router.push('/quotations');
     } finally {
       setLoading(false);
@@ -44,29 +102,147 @@ export default function QuotationDetailPage() {
     }
   }, [id]);
 
-  const handleStatusTransition = async (status: string) => {
-    setUpdatingStatus(true);
+  // Debounced/Triggered autosave settings helper
+  const handleSaveSettings = async (updatedSettings: any) => {
+    setSavingSettings(true);
     try {
-      const response = await api.patch(`/documents/${id}/status`, { status });
-      if (response.data?.success) {
-        showToast(`Document marked as ${status} successfully.`, 'success');
-        setStatusModalOpen(false);
-        fetchDocumentDetails();
+      const res = await api.put(`/documents/${id}/settings`, updatedSettings);
+      if (res.data?.success) {
+        setDocument(res.data.data);
       }
     } catch (err: any) {
-      showToast(err.response?.data?.message || 'Failed to update document status.', 'error');
+      showToast(err.response?.data?.message || 'Failed to autosave settings.', 'error');
     } finally {
-      setUpdatingStatus(false);
+      setSavingSettings(false);
     }
   };
 
+  const handleUpdateAdvancedSetting = (key: string, value: any) => {
+    const updated = {
+      ...localSettings,
+      advanced: {
+        ...localSettings.advanced,
+        [key]: value,
+      },
+    };
+    setLocalSettings(updated);
+    handleSaveSettings(updated);
+  };
+
+  const handleUpdateDesignSetting = (key: string, value: any) => {
+    const updated = {
+      ...localSettings,
+      design: {
+        ...localSettings.design,
+        [key]: value,
+      },
+    };
+    setLocalSettings(updated);
+    handleSaveSettings(updated);
+  };
+
+  // Status transitions
+  const handleStatusChange = async (newStatus: string) => {
+    try {
+      const res = await api.patch(`/documents/${id}/status`, { status: newStatus });
+      if (res.data?.success) {
+        showToast(`Document status marked as ${newStatus}!`, 'success');
+        setDocument(res.data.data);
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.message || 'Failed to change status.', 'error');
+    }
+  };
+
+  // Delete document draft
+  const handleDeleteDocument = async () => {
+    if (!window.confirm(`Are you sure you want to delete draft quotation ${document.documentNumber}?`)) return;
+    try {
+      const res = await api.delete(`/documents/${id}`);
+      if (res.data?.success) {
+        showToast('Document deleted successfully.', 'success');
+        router.push('/quotations');
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.message || 'Failed to delete document.', 'error');
+    }
+  };
+
+  // Duplicate document
+  const handleDuplicateDocument = async () => {
+    try {
+      const res = await api.post(`/documents/${id}/duplicate`);
+      if (res.data?.success) {
+        showToast('Document duplicated successfully.', 'success');
+        router.push(`/quotations/${res.data.data._id}`);
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.message || 'Failed to duplicate document.', 'error');
+    }
+  };
+
+  // Convert to Proforma Invoice
+  const handleConvertToProforma = async () => {
+    if (!window.confirm(`Are you sure you want to convert quotation ${document.documentNumber} to a Proforma Invoice?`)) return;
+    try {
+      const res = await api.post(`/documents/${id}/convert`, { targetType: 'PROFORMA_INVOICE' });
+      if (res.data?.success) {
+        showToast(`Successfully converted to Proforma Invoice ${res.data.data.documentNumber}!`, 'success');
+        router.push(`/proforma-invoices/${res.data.data._id}`);
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.message || 'Failed to convert document.', 'error');
+    }
+  };
+
+  // Convert to Invoice
+  const handleConvertToInvoice = async () => {
+    if (!window.confirm(`Are you sure you want to convert quotation ${document.documentNumber} to a standard Invoice?`)) return;
+    try {
+      const res = await api.post(`/documents/${id}/convert`, { targetType: 'INVOICE' });
+      if (res.data?.success) {
+        showToast(`Successfully converted to Tax Invoice ${res.data.data.documentNumber}!`, 'success');
+        router.push(`/invoices/${res.data.data._id}`);
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.message || 'Failed to convert document.', 'error');
+    }
+  };
+
+  // Print helper
   const handlePrint = () => {
     window.print();
   };
 
+  // Share helper
+  const handleShare = (channel: 'email' | 'whatsapp') => {
+    if (channel === 'email') {
+      showToast(`Email proposal sent to client: ${document?.clientSnapshot?.email || 'N/A'}`, 'success');
+      setIsShareModalOpen(false);
+    } else {
+      const phone = document?.clientSnapshot?.phone || '';
+      const text = encodeURIComponent(`Hi ${document?.clientSnapshot?.clientName || ''}, please review Quotation ${document?.documentNumber} for amount ₹${document?.grandTotal?.toLocaleString('en-IN')}`);
+      window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${text}`, '_blank');
+      showToast('WhatsApp share window opened.', 'success');
+    }
+  };
+
+  // Helper: check profile completion fields remaining
+  const getMissingFieldsCount = () => {
+    if (!businessProfile) return 0;
+    let count = 0;
+    if (!businessProfile.businessName) count++;
+    if (!businessProfile.email) count++;
+    if (!businessProfile.phone) count++;
+    if (!businessProfile.gstin) count++;
+    if (!businessProfile.pan) count++;
+    if (!businessProfile.address?.stateCode) count++;
+    return count;
+  };
+
   if (loading) {
     return (
-      <div className="card-panel p-16 rounded-xl flex items-center justify-center min-h-[300px]">
+      <div className="card-panel p-16 rounded-xl flex items-center justify-center min-h-[400px] bg-white">
         <LoadingSpinner size="md" />
       </div>
     );
@@ -74,21 +250,18 @@ export default function QuotationDetailPage() {
 
   if (!document) return null;
 
-  const displayOptions = document.displayOptions || {
-    showHsnSac: true,
-    showTaxSummary: true,
-    showItemDescriptions: true,
-    showTotalQuantity: true,
-  };
+  const showPlaceOfSupply = !localSettings.advanced.hidePlaceOfSupply;
 
   const getStatusBadge = (status: string) => {
     const styles: Record<string, string> = {
-      DRAFT: 'bg-slate-105 text-slate-700 border-slate-200',
+      DRAFT: 'bg-slate-100 text-slate-700 border-slate-200',
       SENT: 'bg-blue-50 text-blue-700 border-blue-100',
       VIEWED: 'bg-purple-50 text-purple-700 border-purple-100',
       ACCEPTED: 'bg-emerald-50 text-emerald-700 border-emerald-100',
       REJECTED: 'bg-rose-50 text-rose-700 border-rose-100',
       EXPIRED: 'bg-amber-50 text-amber-705 border-amber-100',
+      CONVERTED: 'bg-slate-100 text-slate-500 border-slate-200 line-through',
+      CANCELLED: 'bg-slate-150 text-slate-500 border-slate-300',
     };
 
     return (
@@ -99,370 +272,777 @@ export default function QuotationDetailPage() {
   };
 
   return (
-    <div className="space-y-6 text-slate-800">
-      {/* Page Actions Bar */}
-      <PageHeader
-        title={document.documentNumber}
-        subtitle="Review estimate calculations, current status, and print document view."
-        actions={
-          <div className="flex flex-wrap gap-2 print:hidden">
-            <Link
-              href="/quotations"
-              className="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 rounded-xl text-xs font-semibold transition-colors"
-            >
-              Back to List
-            </Link>
-            
-            {document.status === 'DRAFT' && (
-              <Link
-                href={`/quotations/${document._id}/edit`}
-                className="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 rounded-xl text-xs font-semibold transition-colors"
-              >
-                Edit Quotation
-              </Link>
+    <div className="space-y-6 text-slate-805 pb-16">
+      {/* Breadcrumb / Top menu bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4 print:hidden">
+        <div>
+          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+            {document.businessSnapshot?.businessName || 'TechBes'} / <Link href="/quotations" className="hover:underline">QUOTATIONS</Link> / {document.documentNumber}
+          </span>
+          <div className="flex items-center gap-3 mt-1">
+            <h1 className="text-xl font-bold text-slate-900">{document.documentNumber}</h1>
+            {getStatusBadge(document.status)}
+            {savingSettings && (
+              <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded animate-pulse">
+                Saving...
+              </span>
             )}
-
-            {/* Status Transition buttons */}
-            {document.status === 'DRAFT' && (
-              <button
-                onClick={() => {
-                  setTargetStatus('SENT');
-                  setStatusModalOpen(true);
-                }}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
-              >
-                Mark Sent
-              </button>
-            )}
-
-            {document.status === 'SENT' && (
-              <>
-                <button
-                  onClick={() => {
-                    setTargetStatus('ACCEPTED');
-                    setStatusModalOpen(true);
-                  }}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
-                >
-                  Mark Accepted
-                </button>
-                <button
-                  onClick={() => {
-                    setTargetStatus('REJECTED');
-                    setStatusModalOpen(true);
-                  }}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
-                >
-                  Mark Rejected
-                </button>
-              </>
-            )}
-
-            <button
-              onClick={handlePrint}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-              </svg>
-              Print / PDF
-            </button>
           </div>
-        }
-      />
+        </div>
 
-      {/* Main Container */}
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
-        {/* Printable Card Area */}
-        <div 
-          ref={printRef}
-          className="xl:col-span-3 card-panel rounded-xl p-12 bg-white print:p-0 print:border-none print:shadow-none space-y-8 text-xs text-slate-850 font-sans border border-slate-200"
+        <div className="flex flex-wrap gap-2 text-xs">
+          <Link
+            href="/quotations/new"
+            className="px-4 py-2 border border-blue-200 text-blue-600 hover:bg-blue-50 font-bold rounded-xl transition-all"
+          >
+            Create New Quotation
+          </Link>
+          <button
+            onClick={handlePrint}
+            className="px-4 py-2 bg-slate-805 hover:bg-slate-900 text-white font-bold rounded-xl transition-colors"
+          >
+            Print / PDF
+          </button>
+        </div>
+      </div>
+
+      {/* Action Buttons row */}
+      <div className="flex flex-wrap gap-2.5 border-b border-slate-100 pb-6 print:hidden">
+        {document.status === 'DRAFT' && (
+          <Link
+            href={`/quotations/${document._id}/edit`}
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-sm text-xs"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+            Edit Document
+          </Link>
+        )}
+        <button
+          onClick={() => {
+            showToast('No lead is linked to this quotation.', 'info');
+          }}
+          className="px-4 py-2.5 border border-slate-350 bg-white hover:bg-slate-50 font-bold rounded-xl text-slate-705 transition-colors text-xs"
         >
-          {/* Top Invoice Header */}
-          <div className="flex justify-between items-start border-b border-slate-200 pb-6">
-            <div>
-              <h2 className="text-2xl font-black tracking-tight text-slate-900">QUOTATION</h2>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1">{document.businessSnapshot.businessName}</p>
+          Change Lead Status
+        </button>
+        <button
+          onClick={handlePrint}
+          className="px-4 py-2.5 border border-slate-355 bg-white hover:bg-slate-50 font-bold rounded-xl text-slate-705 transition-colors text-xs"
+        >
+          Download PDF
+        </button>
+        <button
+          onClick={() => setIsShareModalOpen(true)}
+          className="px-4 py-2.5 border border-slate-350 bg-white hover:bg-slate-50 font-bold rounded-xl text-slate-750 transition-colors text-xs flex items-center gap-1.5"
+        >
+          Email / WhatsApp
+        </button>
 
-              <div className="mt-5 space-y-1 text-slate-650 font-medium">
-                <p className="font-bold text-slate-900 text-sm">{document.businessSnapshot.businessName}</p>
-                <p>Email: {document.businessSnapshot.email || '—'}</p>
-                <p>Phone: {document.businessSnapshot.phone || '—'}</p>
-                {document.businessSnapshot.gstin && <p className="font-mono">GSTIN: {document.businessSnapshot.gstin}</p>}
-                {document.businessSnapshot.address?.addressLine1 && (
-                  <p className="max-w-xs mt-1 leading-relaxed text-slate-600 font-normal">
-                    {document.businessSnapshot.address.addressLine1}, {document.businessSnapshot.address.city}, {document.businessSnapshot.address.state} - {document.businessSnapshot.address.pincode}
-                  </p>
-                )}
-              </div>
-            </div>
+        {/* More Actions Selector */}
+        <div className="flex gap-2">
+          {document.status === 'DRAFT' && (
+            <button
+              onClick={() => handleStatusChange('SENT')}
+              className="px-3.5 py-2.5 border border-slate-350 bg-white hover:bg-slate-50 font-bold rounded-xl text-slate-705 transition-colors text-xs"
+            >
+              Mark Sent
+            </button>
+          )}
+          {document.status === 'SENT' && (
+            <>
+              <button
+                onClick={() => handleStatusChange('ACCEPTED')}
+                className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors text-xs"
+              >
+                Mark Accepted
+              </button>
+              <button
+                onClick={() => handleStatusChange('REJECTED')}
+                className="px-3.5 py-2.5 border border-rose-220 text-rose-600 hover:bg-rose-50 font-bold rounded-xl transition-colors text-xs"
+              >
+                Mark Rejected
+              </button>
+            </>
+          )}
+          {document.status !== 'CONVERTED' && (
+            <>
+              <button
+                onClick={handleConvertToProforma}
+                className="px-4 py-2.5 border border-emerald-200 text-emerald-600 hover:bg-emerald-50 font-bold rounded-xl transition-colors text-xs"
+              >
+                Convert to Proforma
+              </button>
+              <button
+                onClick={handleConvertToInvoice}
+                className="px-4 py-2.5 border border-blue-200 text-blue-600 hover:bg-blue-50 font-bold rounded-xl transition-colors text-xs"
+              >
+                Convert to Invoice
+              </button>
+            </>
+          )}
+          <button
+            onClick={handleDuplicateDocument}
+            className="px-3.5 py-2.5 border border-slate-355 bg-white hover:bg-slate-50 font-bold rounded-xl text-slate-705 transition-colors text-xs"
+            title="Duplicate"
+          >
+            Duplicate
+          </button>
+          {document.status === 'DRAFT' && (
+            <button
+              onClick={handleDeleteDocument}
+              className="px-3.5 py-2.5 border border-rose-200 text-rose-600 hover:bg-rose-50 font-bold rounded-xl transition-colors text-xs"
+              title="Delete Draft"
+            >
+              Delete Draft
+            </button>
+          )}
+        </div>
+      </div>
 
-            <div className="text-right space-y-1.5 font-mono text-slate-650">
-              <div>
-                <span className="font-bold text-slate-900">Doc No: </span>
-                <span className="font-semibold text-brand-primary">{document.documentNumber}</span>
-              </div>
-              <p><span className="font-bold text-slate-900">Issue Date:</span> {new Date(document.issueDate).toLocaleDateString('en-IN')}</p>
-              <p>
-                <span className="font-bold text-slate-900">Valid Till:</span>{' '}
-                {document.validTill ? new Date(document.validTill).toLocaleDateString('en-IN') : '—'}
-              </p>
-              {document.poNumber && <p><span className="font-bold text-slate-900">PO Ref:</span> {document.poNumber}</p>}
-              <div className="pt-2 print:hidden">
-                {getStatusBadge(document.status)}
-              </div>
-            </div>
-          </div>
-
-          {/* Client & Shipping Details */}
-          <div className="grid grid-cols-2 gap-8 border-b border-slate-200 pb-6">
-            <div>
-              <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">QUOTATION FOR</h3>
-              <div className="space-y-1.5 text-slate-650">
-                <p className="font-bold text-slate-900">
-                  {document.clientSnapshot.businessName || document.clientSnapshot.clientName}
-                </p>
-                {document.clientSnapshot.businessName && <p>Attn: {document.clientSnapshot.clientName}</p>}
-                <p>Email: {document.clientSnapshot.email || '—'}</p>
-                <p>Phone: {document.clientSnapshot.phone || '—'}</p>
-                {document.clientSnapshot.gstin && <p className="font-mono">GSTIN: {document.clientSnapshot.gstin}</p>}
-                {document.clientSnapshot.billingAddress?.addressLine1 && (
-                  <p className="max-w-xs mt-1 leading-relaxed text-slate-600 font-normal">
-                    {document.clientSnapshot.billingAddress.addressLine1}, {document.clientSnapshot.billingAddress.city}, {document.clientSnapshot.billingAddress.state} - {document.clientSnapshot.billingAddress.pincode}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {document.shippingAddress && document.shippingAddress.addressLine1 && (
-              <div>
-                <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">SHIPPING DETAILS</h3>
-                <div className="space-y-1 text-slate-655 leading-relaxed text-slate-600 font-normal">
-                  <p>{document.shippingAddress.addressLine1}</p>
-                  {document.shippingAddress.addressLine2 && <p>{document.shippingAddress.addressLine2}</p>}
-                  <p>{document.shippingAddress.city}, {document.shippingAddress.state} - {document.shippingAddress.pincode}</p>
-                  <p>{document.shippingAddress.country}</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Table Items */}
+      {/* Collapsible Quotation Summary Block */}
+      <div className="card-panel p-5 rounded-2xl bg-white border border-slate-200 text-xs print:hidden">
+        <h3 className="font-bold text-slate-900 pb-2 border-b border-slate-108 uppercase tracking-wider text-[10px]">
+          Quotation Summary
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-3 text-slate-650">
           <div>
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-300 font-semibold text-slate-500">
-                  <th className="py-2.5">Item Details</th>
-                  {displayOptions.showHsnSac && <th className="py-2.5 w-[100px] text-center">HSN/SAC</th>}
-                  <th className="py-2.5 w-[80px] text-center">Qty</th>
-                  <th className="py-2.5 w-[95px] text-right">Rate</th>
-                  <th className="py-2.5 w-[110px] text-right">Discount</th>
-                  <th className="py-2.5 w-[80px] text-center">GST %</th>
-                  <th className="py-2.5 w-[110px] text-right">Total (INR)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {document.items.map((item: any, idx: number) => (
-                  <tr key={idx} className="align-top py-2.5">
-                    <td className="py-2.5">
-                      <p className="font-semibold text-slate-900">{item.itemName}</p>
-                      {displayOptions.showItemDescriptions && item.description && (
-                        <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed font-normal">{item.description}</p>
-                      )}
-                    </td>
-                    {displayOptions.showHsnSac && (
-                      <td className="py-2.5 text-center font-mono text-[11px] text-slate-600">{item.hsnSac || '—'}</td>
-                    )}
-                    <td className="py-2.5 text-center font-medium">
-                      {item.quantity} <span className="text-[10px] text-slate-500 font-normal">{item.unit}</span>
-                    </td>
-                    <td className="py-2.5 text-right font-mono">₹{item.rate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                    <td className="py-2.5 text-right text-slate-500 font-mono">
-                      {item.discountType === 'PERCENTAGE' ? (
-                        `%${item.discountValue} (-₹${item.itemDiscountAmount.toLocaleString('en-IN')})`
-                      ) : item.discountType === 'FIXED' ? (
-                        `-₹${item.itemDiscountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="py-2.5 text-center text-slate-650">{item.gstRate}%</td>
-                    <td className="py-2.5 text-right font-bold text-slate-850 font-mono">
-                      ₹{item.total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
+            <span className="block font-semibold text-slate-450">Client:</span>
+            <span className="font-bold text-slate-800">{document.clientSnapshot?.businessName || document.clientSnapshot?.clientName}</span>
+          </div>
+          <div>
+            <span className="block font-semibold text-slate-450">Dates:</span>
+            <span>Issue: {new Date(document.issueDate).toLocaleDateString('en-IN')} | Valid till: {new Date(document.validTill).toLocaleDateString('en-IN')}</span>
+          </div>
+          <div>
+            <span className="block font-semibold text-slate-455">Status:</span>
+            <span className="font-bold text-slate-800 uppercase bg-slate-100 px-2 py-0.5 rounded">
+              {document.status}
+            </span>
+          </div>
+          <div>
+            <span className="block font-semibold text-slate-450">Grand Total:</span>
+            <span className="font-bold text-slate-900 text-sm">
+              ₹{document.grandTotal?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
+        {/* Central PDF layout Preview Document */}
+        <div className="xl:col-span-3 space-y-6">
+          <div
+            ref={printRef}
+            className={`card-panel p-12 sm:p-16 rounded-2xl bg-white shadow-md border border-slate-250 min-h-[1100px] text-xs leading-relaxed max-w-4A mx-auto ${
+              localSettings.design.tableStyle === 'Striped' ? 'print-striped' : ''
+            }`}
+            style={{ fontFamily: localSettings.design.fontFamily === 'Courier' ? 'Courier New, monospace' : 'inherit' }}
+          >
+            {/* Template Header layout mapping */}
+            <div className={`flex justify-between items-start border-b border-slate-200 pb-8 ${
+              localSettings.design.headerAlignment === 'Center' ? 'flex-col items-center text-center' : ''
+            }`}>
+              {/* Logo block */}
+              {document.businessSnapshot?.logo && (
+                <div className={`mb-4 ${
+                  localSettings.design.logoPosition === 'Right' ? 'order-last' : 'order-first'
+                }`}>
+                  <img src={document.businessSnapshot.logo} alt="Logo" className="w-32 max-h-20 object-contain" />
+                </div>
+              )}
+
+              {/* Billed By Details */}
+              <div className="space-y-1 text-slate-650">
+                <h2 className="text-lg font-black text-slate-900">{document.businessSnapshot?.businessName}</h2>
+                <p>{document.businessSnapshot?.address?.addressLine1}</p>
+                {document.businessSnapshot?.address?.addressLine2 && <p>{document.businessSnapshot.address.addressLine2}</p>}
+                <p>{document.businessSnapshot?.address?.city}, {document.businessSnapshot?.address?.state} - {document.businessSnapshot?.address?.pincode}</p>
+                {document.businessSnapshot?.gstin && <p><span className="font-bold text-slate-450 uppercase">GSTIN:</span> {document.businessSnapshot.gstin}</p>}
+                {document.businessSnapshot?.pan && <p><span className="font-bold text-slate-450 uppercase">PAN:</span> {document.businessSnapshot.pan}</p>}
+                <p className="text-slate-450">{document.businessSnapshot?.email} | {document.businessSnapshot?.phone}</p>
+              </div>
+            </div>
+
+            {/* Title / Numbers Header info */}
+            <div className="grid grid-cols-2 gap-8 border-b border-slate-200 py-6">
+              <div>
+                <h1 className="text-xl font-black text-slate-900">{document.title || 'Quotation'}</h1>
+                {document.subtitle && <p className="text-xs text-slate-505 font-medium mt-1">{document.subtitle}</p>}
+
+                <div className="mt-4 space-y-1 text-slate-650 font-medium">
+                  <p className="font-bold text-slate-900 uppercase text-[9px] tracking-wider mb-1">QUOTATION FOR</p>
+                  <p className="font-bold text-slate-900">{document.clientSnapshot?.businessName || document.clientSnapshot?.clientName}</p>
+                  <p>{document.clientSnapshot?.billingAddress?.addressLine1}</p>
+                  <p>{document.clientSnapshot?.billingAddress?.city}, {document.clientSnapshot?.billingAddress?.state} - {document.clientSnapshot?.billingAddress?.pincode}</p>
+                  {document.clientSnapshot?.gstin && <p><span className="font-bold text-slate-450 uppercase">GSTIN:</span> {document.clientSnapshot.gstin}</p>}
+                </div>
+
+                {document.shippingDetails?.addressLine1 && (
+                  <div className="mt-4 space-y-1 text-slate-550">
+                    <p className="font-bold text-slate-950 uppercase text-[9px] tracking-wider mb-1">SHIPPING DETAILS</p>
+                    <p>{document.shippingDetails.addressLine1}</p>
+                    <p>{document.shippingDetails.city}, {document.shippingDetails.state} - {document.shippingDetails.pincode}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Invoice properties numbers */}
+              <div className="text-right space-y-1.5 text-slate-650">
+                <p><span className="font-bold text-slate-900">Quotation No:</span> {document.documentNumber}</p>
+                {document.poNumber && <p><span className="font-bold text-slate-900">PO Ref:</span> {document.poNumber}</p>}
+                <p>
+                  <span className="font-bold text-slate-900">Quotation Date:</span>{' '}
+                  {new Date(document.issueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </p>
+                <p>
+                  <span className="font-bold text-slate-900">Valid Till:</span>{' '}
+                  {new Date(document.validTill).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </p>
+                {showPlaceOfSupply && document.gstConfiguration?.placeOfSupply?.state && (
+                  <p><span className="font-bold text-slate-900">Place of Supply:</span> {document.gstConfiguration.placeOfSupply.state}</p>
+                )}
+                {/* Custom fields mapped */}
+                {document.customFields?.map((field: any, index: number) => (
+                  <p key={index}><span className="font-bold text-slate-900">{field.label}:</span> {field.value}</p>
                 ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Calculations */}
-          <div className="flex flex-col md:flex-row justify-between items-start gap-6 border-t border-slate-200 pt-6">
-            <div className="max-w-md space-y-4">
-              {displayOptions.showTaxSummary && (
-                <div className="space-y-1 text-[10px] text-slate-600 font-mono">
-                  <p className="font-bold text-slate-500 uppercase tracking-wider mb-1 text-[9px]">Tax Summary</p>
-                  <p>Taxable Base Sum: ₹{document.taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                  {document.gstMode === 'INTRA_STATE' ? (
-                    <>
-                      <p>CGST Total: ₹{document.cgstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                      <p>SGST Total: ₹{document.sgstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                    </>
-                  ) : (
-                    <p>IGST Total: ₹{document.igstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="w-full md:w-80 space-y-2.5 text-slate-750">
-              <div className="flex justify-between items-center text-slate-500">
-                <span>Subtotal</span>
-                <span>₹{document.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-              </div>
-              {document.documentDiscountAmount > 0 && (
-                <div className="flex justify-between items-center text-rose-600 font-semibold">
-                  <span>Document Discount</span>
-                  <span>-₹{document.documentDiscountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                </div>
-              )}
-              <div className="flex justify-between items-center text-slate-500">
-                <span>Taxable Amount</span>
-                <span>₹{document.taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-              </div>
-              {document.gstMode === 'INTRA_STATE' ? (
-                <div className="flex justify-between items-center text-slate-500">
-                  <span>CGST + SGST</span>
-                  <span>₹{(document.cgstTotal + document.sgstTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                </div>
-              ) : (
-                <div className="flex justify-between items-center text-slate-500">
-                  <span>IGST</span>
-                  <span>₹{document.igstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                </div>
-              )}
-              {document.additionalChargesTotal > 0 && (
-                <div className="flex justify-between items-center text-slate-500">
-                  <span>Additional Charges</span>
-                  <span>+₹{document.additionalChargesTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                </div>
-              )}
-              {Math.abs(document.roundOff) > 0 && (
-                <div className="flex justify-between items-center text-slate-500">
-                  <span>Round Off</span>
-                  <span>₹{document.roundOff.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                </div>
-              )}
-              <div className="flex justify-between items-center text-sm font-bold text-slate-900 border-t border-slate-200 pt-2">
-                <span>Grand Total</span>
-                <span className="text-brand-primary text-base font-black">
-                  ₹{document.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="text-[10px] text-slate-500 italic text-right mt-1 font-semibold leading-relaxed font-sans">
-                In Words: {document.grandTotalInWords}
               </div>
             </div>
-          </div>
 
-          {/* Custom clauses/metadata and signature */}
-          <div className="border-t border-slate-200 pt-6 grid grid-cols-1 md:grid-cols-2 gap-8 text-[11px] text-slate-650 font-sans">
-            <div className="space-y-4">
-              {document.terms && (
-                <div>
-                  <p className="font-bold text-slate-500 uppercase text-[9px] mb-1 tracking-wider">Terms & Conditions</p>
-                  <p className="whitespace-pre-wrap leading-relaxed">{document.terms}</p>
-                </div>
-              )}
-              {document.notes && (
-                <div>
-                  <p className="font-bold text-slate-500 uppercase text-[9px] mb-1 tracking-wider">Remarks / Notes</p>
-                  <p className="whitespace-pre-wrap leading-relaxed">{document.notes}</p>
-                </div>
-              )}
+            {/* Line Items Table */}
+            <div className="py-6 overflow-hidden">
+              <table className="w-full border-collapse text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-500 font-semibold uppercase text-[9px] tracking-wider bg-slate-50/50">
+                    <th className="px-4 py-2">Item Description</th>
+                    {localSettings.advanced.hsnColumnView !== 'Hide' && <th className="px-3 py-2 w-24">HSN</th>}
+                    {document.gstConfiguration?.gstEnabled && <th className="px-3 py-2 w-16">GST %</th>}
+                    <th className="px-3 py-2 w-16 text-right">Qty</th>
+                    <th className="px-3 py-2 w-24 text-right">Rate</th>
+                    <th className="px-3 py-2 w-28 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700 bg-white">
+                  {document.items?.map((item: any, i: number) => {
+                    const isGroup = item.itemName && item.itemName.startsWith('[GROUP] ');
+                    if (isGroup) {
+                      return (
+                        <tr key={i} className="bg-blue-50/20 font-bold border-y border-blue-100">
+                          <td colSpan={6} className="px-4 py-2 text-slate-900 uppercase text-[10px] tracking-wider">
+                            {item.itemName.substring(8)}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return (
+                      <tr key={i} className="hover:bg-slate-50/30">
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2">
+                            {localSettings.advanced.showOriginalItemImages && item.image && (
+                              <img src={item.image} alt="item-thumb" className="w-8 h-8 rounded object-contain flex-shrink-0 border border-slate-100 bg-slate-50" />
+                            )}
+                            <div>
+                              <p className="font-semibold text-slate-900">{item.itemName}</p>
+                              {item.description && <p className="text-[10px] text-slate-450 mt-0.5 whitespace-pre-wrap">{item.description}</p>}
+                            </div>
+                          </div>
+                        </td>
+                        {localSettings.advanced.hsnColumnView !== 'Hide' && <td className="px-3 py-3 font-mono">{item.hsnSac || '—'}</td>}
+                        {document.gstConfiguration?.gstEnabled && <td className="px-3 py-3">{item.gstRate || 0}%</td>}
+                        <td className="px-3 py-3 text-right">
+                          {item.quantity} {localSettings.advanced.unitDisplay === 'Separate column' ? (item.unit || 'PCS') : ''}
+                        </td>
+                        <td className="px-3 py-3 text-right">₹{item.rate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-3 py-3 text-right font-semibold text-slate-900">
+                          ₹{((item.quantity * item.rate) - (item.itemDiscountAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
 
-            <div className="flex flex-col justify-end items-end space-y-6 pt-6">
-              {document.signatoryName && (
-                <div className="text-center font-medium text-slate-700 min-w-[150px]">
-                  <div className="h-10 border-b border-slate-200 mb-2" />
-                  <p className="font-bold text-slate-900">{document.signatoryName}</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-wider font-bold">Authorized Signatory</p>
+            {/* Calculations totals summaries card */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-slate-200 pt-6">
+              {/* Left Column: terms, remarks, signatures */}
+              <div className="space-y-4">
+                {document.notes && (
+                  <div>
+                    <h4 className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Remarks / Notes</h4>
+                    <p className="text-slate-650 text-[10px] whitespace-pre-wrap leading-relaxed">{document.notes}</p>
+                  </div>
+                )}
+                {document.terms && (
+                  <div>
+                    <h4 className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Terms & Conditions</h4>
+                    <p className="text-slate-650 text-[10px] whitespace-pre-wrap leading-relaxed">{document.terms}</p>
+                  </div>
+                )}
+
+                {/* Bank Account snapshot details */}
+                {document.bankDetails?.accountNumber && (
+                  <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl space-y-1.5 text-[10px] text-slate-605 max-w-sm">
+                    <p className="font-bold text-[9px] text-slate-955 uppercase tracking-wider border-b border-slate-200 pb-1">Payment Settlement Details</p>
+                    <p><span className="font-semibold">Bank:</span> {document.bankDetails.bankName}</p>
+                    <p><span className="font-semibold">A/C Holder:</span> {document.bankDetails.accountHolderName}</p>
+                    <p><span className="font-semibold">A/C Number:</span> <span className="font-mono text-slate-900 font-bold">{document.bankDetails.accountNumber}</span></p>
+                    <p><span className="font-semibold">IFSC Code:</span> <span className="font-mono uppercase text-slate-900 font-bold">{document.bankDetails.ifsc}</span></p>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column: summary totals */}
+              <div className="space-y-3.5 text-right text-slate-650 max-w-md ml-auto w-full">
+                <div className="flex justify-between">
+                  <span>Subtotal:</span>
+                  <span className="font-semibold text-slate-900">₹{document.subtotal?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
-              )}
+                {document.documentDiscountAmount > 0 && (
+                  <div className="flex justify-between text-slate-500">
+                    <span>Discount:</span>
+                    <span>- ₹{document.documentDiscountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+
+                {/* Tax Breakdown rows */}
+                {document.gstConfiguration?.gstEnabled && (
+                  <>
+                    {document.cgstTotal > 0 && (
+                      <div className="flex justify-between">
+                        <span>CGST:</span>
+                        <span>₹{document.cgstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                    {document.sgstTotal > 0 && (
+                      <div className="flex justify-between">
+                        <span>SGST:</span>
+                        <span>₹{document.sgstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                    {document.igstTotal > 0 && (
+                      <div className="flex justify-between">
+                        <span>IGST:</span>
+                        <span>₹{document.igstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {document.additionalChargesTotal > 0 && (
+                  <div className="flex justify-between">
+                    <span>Shipping & Charges:</span>
+                    <span>₹{document.additionalChargesTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+
+                {document.roundOff !== 0 && (
+                  <div className="flex justify-between text-slate-550">
+                    <span>Round-off:</span>
+                    <span>₹{document.roundOff > 0 ? '+' : ''}{document.roundOff.toFixed(2)}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between border-t border-slate-205 pt-3 text-sm font-black text-slate-900">
+                  <span>Grand Total (INR):</span>
+                  <span>₹{document.grandTotal?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                </div>
+
+                {/* Total in words */}
+                {document.grandTotalInWords && (
+                  <p className="text-[10px] text-slate-450 italic pt-1">
+                    Amount in Words: {document.grandTotalInWords}
+                  </p>
+                )}
+
+                {/* Signature slot render */}
+                {document.signature?.signatoryName && (
+                  <div className="pt-8 flex flex-col items-end space-y-2">
+                    {document.signature.signatureUrl && (
+                      <img src={document.signature.signatureUrl} alt="Signature Watermark" className="h-10 object-contain pr-4" />
+                    )}
+                    <div className="text-center w-48 border-t border-slate-200 pt-1">
+                      <p className="font-bold text-slate-900">{document.signature.signatoryName}</p>
+                      <p className="text-[9px] text-slate-450 uppercase tracking-wider font-bold">Authorized Signatory</p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Side Audit Log/Meta Panel (Hidden during print) */}
-        <div className="card-panel p-6 rounded-xl space-y-6 bg-white text-xs text-slate-750 print:hidden">
-          <h3 className="font-bold text-sm text-slate-900 pb-2 border-b border-slate-100">Details & Audit</h3>
-          
-          <div className="space-y-3.5">
-            <div>
-              <span className="font-semibold text-slate-500 block mb-1">Status</span>
-              {getStatusBadge(document.status)}
+        {/* Batch Summary check */}
+        <div className="xl:col-span-3 card-panel p-5 rounded-2xl bg-white border border-slate-200 text-xs print:hidden space-y-2">
+          <h3 className="font-bold text-slate-900 pb-2 border-b border-slate-108 uppercase tracking-wider text-[10px]">
+            Batch Summary Ledger
+          </h3>
+          <p className="italic text-slate-400">No batch details available for this quotation.</p>
+        </div>
+
+        {/* Bottom repeated action toolbar */}
+        <div className="xl:col-span-3 card-panel p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap gap-2 text-xs print:hidden">
+          <Link
+            href={`/quotations/${document._id}/edit`}
+            className="px-3.5 py-2 border border-slate-350 bg-white hover:bg-slate-50 font-bold rounded-lg text-slate-705 transition-colors"
+          >
+            Edit Quotation
+          </Link>
+          <button
+            onClick={() => showToast('No lead is linked to this quotation.', 'info')}
+            className="px-3.5 py-2 border border-slate-350 bg-white hover:bg-slate-50 font-bold rounded-lg text-slate-705 transition-colors"
+          >
+            Change Lead Status
+          </button>
+          <button
+            onClick={handlePrint}
+            className="px-3.5 py-2 border border-slate-350 bg-white hover:bg-slate-50 font-bold rounded-lg text-slate-750 transition-colors"
+          >
+            Print
+          </button>
+          <button
+            onClick={handlePrint}
+            className="px-3.5 py-2 border border-slate-350 bg-white hover:bg-slate-50 font-bold rounded-lg text-slate-750 transition-colors"
+          >
+            Download PDF
+          </button>
+          <button
+            onClick={() => setIsShareModalOpen(true)}
+            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors shadow-sm"
+          >
+            Email / WhatsApp
+          </button>
+        </div>
+
+        {/* Right side: settings accordions panel */}
+        <div className="xl:col-span-1 space-y-4 print:hidden">
+          <div className="card-panel p-5 rounded-2xl bg-white shadow-sm border border-slate-200 space-y-4">
+            <h3 className="text-sm font-black text-slate-900 pb-2 border-b border-slate-100">
+              Quotation Settings
+            </h3>
+
+            {/* Accordion List */}
+            <div className="space-y-2 text-xs">
+              {/* 1. Advanced Settings */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setExpandedSection(expandedSection === 'advanced' ? null : 'advanced')}
+                  className="w-full bg-slate-50 hover:bg-slate-100 px-4 py-2.5 flex items-center justify-between text-slate-805 font-bold border-b border-slate-200"
+                >
+                  <span>1. Advanced Settings</span>
+                  <span className="font-bold">{expandedSection === 'advanced' ? '−' : '+'}</span>
+                </button>
+                {expandedSection === 'advanced' && (
+                  <div className="p-4 space-y-3.5 bg-white leading-relaxed text-slate-650">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">HSN Column View</label>
+                      <select
+                        value={localSettings.advanced.hsnColumnView}
+                        onChange={(e) => handleUpdateAdvancedSetting('hsnColumnView', e.target.value)}
+                        className="w-full form-input text-xs text-slate-900 bg-white"
+                      >
+                        <option value="Default">Default</option>
+                        <option value="HSN Only">HSN Only</option>
+                        <option value="SAC Only">SAC Only</option>
+                        <option value="HSN/SAC">HSN/SAC</option>
+                        <option value="Hide">Hide</option>
+                      </select>
+                    </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={!localSettings.advanced.hidePlaceOfSupply}
+                        onChange={(e) => handleUpdateAdvancedSetting('hidePlaceOfSupply', !e.target.checked)}
+                        className="rounded text-blue-600 border-slate-350 w-4 h-4"
+                      />
+                      <span>Show Place/Country Of Supply</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={localSettings.advanced.showOriginalItemImages}
+                        onChange={(e) => handleUpdateAdvancedSetting('showOriginalItemImages', e.target.checked)}
+                        className="rounded text-blue-600 border-slate-350 w-4 h-4"
+                      />
+                      <span>Add original images in line items</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={localSettings.advanced.showFullWidthDescription}
+                        onChange={(e) => handleUpdateAdvancedSetting('showFullWidthDescription', e.target.checked)}
+                        className="rounded text-blue-600 border-slate-350 w-4 h-4"
+                      />
+                      <span>Show Description In Full Width</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={localSettings.advanced.showSKU}
+                        onChange={(e) => handleUpdateAdvancedSetting('showSKU', e.target.checked)}
+                        className="rounded text-blue-600 border-slate-355 w-4 h-4"
+                      />
+                      <span>Show SKU in Quotation</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Customize design */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setExpandedSection(expandedSection === 'design' ? null : 'design')}
+                  className="w-full bg-slate-50 hover:bg-slate-100 px-4 py-2.5 flex items-center justify-between text-slate-805 font-bold border-b border-slate-200"
+                >
+                  <span>2. Customize Design</span>
+                  <span className="font-bold">{expandedSection === 'design' ? '−' : '+'}</span>
+                </button>
+                {expandedSection === 'design' && (
+                  <div className="p-4 space-y-3 bg-white text-slate-650">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Select Template</label>
+                      <select
+                        value={localSettings.design.templateId}
+                        onChange={(e) => handleUpdateDesignSetting('templateId', e.target.value)}
+                        className="w-full form-input text-xs text-slate-900 bg-white"
+                      >
+                        <option value="Professional">Professional (Classic)</option>
+                        <option value="Modern">Modern (Bold)</option>
+                        <option value="Minimal">Minimal (Clean)</option>
+                        <option value="Compact">Compact (Sleek)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Font Family</label>
+                      <select
+                        value={localSettings.design.fontFamily}
+                        onChange={(e) => handleUpdateDesignSetting('fontFamily', e.target.value)}
+                        className="w-full form-input text-xs text-slate-900 bg-white"
+                      >
+                        <option value="Inter">Inter (Sans Serif)</option>
+                        <option value="Courier">Courier (Monospace)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Table Style</label>
+                      <select
+                        value={localSettings.design.tableStyle}
+                        onChange={(e) => handleUpdateDesignSetting('tableStyle', e.target.value)}
+                        className="w-full form-input text-xs text-slate-900 bg-white"
+                      >
+                        <option value="Standard">Standard Grid</option>
+                        <option value="Striped">Zebra Striped Rows</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Bank and UPI details status info */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setExpandedSection(expandedSection === 'payments' ? null : 'payments')}
+                  className="w-full bg-slate-50 hover:bg-slate-100 px-4 py-2.5 flex items-center justify-between text-slate-805 font-bold border-b border-slate-200"
+                >
+                  <span>3. Bank and UPI Details</span>
+                  <span className="font-bold">{expandedSection === 'payments' ? '−' : '+'}</span>
+                </button>
+                {expandedSection === 'payments' && (
+                  <div className="p-4 space-y-2 bg-white text-slate-650 text-xs">
+                    <p className="italic">Payments configuration is not enabled for Quotations.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* 4. Acceptance History */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setExpandedSection(expandedSection === 'acceptance' ? null : 'acceptance')}
+                  className="w-full bg-slate-50 hover:bg-slate-100 px-4 py-2.5 flex items-center justify-between text-slate-805 font-bold border-b border-slate-200"
+                >
+                  <span>4. Acceptance History</span>
+                  <span className="font-bold">{expandedSection === 'acceptance' ? '−' : '+'}</span>
+                </button>
+                {expandedSection === 'acceptance' && (
+                  <div className="p-4 bg-white text-slate-605 max-h-48 overflow-y-auto space-y-2">
+                    {(!document.acceptanceHistory || document.acceptanceHistory.length === 0) ? (
+                      <p className="italic text-slate-400">No client acceptance records found.</p>
+                    ) : (
+                      document.acceptanceHistory.map((hist: any, i: number) => (
+                        <div key={i} className="border-b border-slate-100 pb-1.5 text-[10px]">
+                          <p className="font-bold text-slate-900">Status: {hist.status}</p>
+                          <p className="text-slate-450">{new Date(hist.timestamp).toLocaleString('en-IN')}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 5. Audit Trail */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setExpandedSection(expandedSection === 'audit' ? null : 'audit')}
+                  className="w-full bg-slate-50 hover:bg-slate-100 px-4 py-2.5 flex items-center justify-between text-slate-805 font-bold border-b border-slate-200"
+                >
+                  <span>5. Audit Trail</span>
+                  <span className="font-bold">{expandedSection === 'audit' ? '−' : '+'}</span>
+                </button>
+                {expandedSection === 'audit' && (
+                  <div className="p-4 bg-white text-slate-605 max-h-48 overflow-y-auto space-y-2">
+                    {(!document.auditTrail || document.auditTrail.length === 0) ? (
+                      <p className="italic text-slate-400">No audit records found.</p>
+                    ) : (
+                      document.auditTrail.map((log: any, i: number) => (
+                        <div key={i} className="border-b border-slate-100 pb-1.5 text-[10px]">
+                          <p className="font-bold text-slate-900">{log.action}</p>
+                          <p className="text-slate-550">{log.description}</p>
+                          <p className="text-slate-455">By {log.userName} at {new Date(log.timestamp).toLocaleString('en-IN')}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 6. Linked Documents */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setExpandedSection(expandedSection === 'links' ? null : 'links')}
+                  className="w-full bg-slate-50 hover:bg-slate-100 px-4 py-2.5 flex items-center justify-between text-slate-805 font-bold border-b border-slate-200"
+                >
+                  <span>6. Linked Documents</span>
+                  <span className="font-bold">{expandedSection === 'links' ? '−' : '+'}</span>
+                </button>
+                {expandedSection === 'links' && (
+                  <div className="p-4 bg-white text-slate-605 space-y-2">
+                    {(!document.linkedDocuments || document.linkedDocuments.length === 0) ? (
+                      <p className="italic text-slate-400">No connections exist.</p>
+                    ) : (
+                      document.linkedDocuments.map((link: any, i: number) => (
+                        <div key={i} className="text-xs">
+                          <span className="font-semibold text-slate-500 uppercase tracking-wider text-[9px] block">{link.relationType}</span>
+                          <span className="font-bold text-slate-900">{link.documentType} {link.documentNumber}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 7. Linked Lead */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setExpandedSection(expandedSection === 'lead' ? null : 'lead')}
+                  className="w-full bg-slate-50 hover:bg-slate-100 px-4 py-2.5 flex items-center justify-between text-slate-850 font-bold border-b border-slate-200"
+                >
+                  <span>7. Linked Lead</span>
+                  <span className="font-bold">{expandedSection === 'lead' ? '−' : '+'}</span>
+                </button>
+                {expandedSection === 'lead' && (
+                  <div className="p-4 bg-white text-slate-655 space-y-1.5">
+                    <p className="italic text-slate-400">No lead linked to this quotation.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* 8. View Approval History */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setExpandedSection(expandedSection === 'approval' ? null : 'approval')}
+                  className="w-full bg-slate-50 hover:bg-slate-100 px-4 py-2.5 flex items-center justify-between text-slate-850 font-bold border-b border-slate-200"
+                >
+                  <span>8. View Approval History</span>
+                  <span className="font-bold">{expandedSection === 'approval' ? '−' : '+'}</span>
+                </button>
+                {expandedSection === 'approval' && (
+                  <div className="p-4 bg-white text-slate-655 space-y-1.5">
+                    <p className="italic text-slate-400">Approval workflow is not enabled.</p>
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div>
-              <span className="font-semibold text-slate-500 block">GST Classification</span>
-              <span className="font-semibold text-slate-900">
-                {document.gstMode === 'INTRA_STATE' ? 'Intra-state CGST+SGST' : 'Inter-state IGST'}
-              </span>
-            </div>
-
-            <div>
-              <span className="font-semibold text-slate-500 block">Place of Supply</span>
-              <span className="font-medium text-slate-800">
-                {document.placeOfSupply?.state} ({document.placeOfSupply?.stateCode})
-              </span>
-            </div>
-
-            <div className="border-t border-slate-100 pt-3.5 space-y-2">
-              <p>
-                <span className="font-semibold text-slate-500">Created:</span>{' '}
-                <span className="text-slate-700">{new Date(document.createdAt).toLocaleString('en-IN')}</span>
-              </p>
-              <p>
-                <span className="font-semibold text-slate-500">Last Updated:</span>{' '}
-                <span className="text-slate-700">{new Date(document.updatedAt).toLocaleString('en-IN')}</span>
-              </p>
+            {/* Bottom Business Profile Status Ready check */}
+            <div className="pt-4 border-t border-slate-100 text-xs">
+              <span className="block font-bold text-slate-450 uppercase text-[9px] tracking-wider mb-2">Business Profile Status</span>
+              {getMissingFieldsCount() === 0 ? (
+                <div className="flex items-center gap-1.5 text-emerald-600 font-bold text-[10px]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span>Your Business Profile Is Ready</span>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-amber-600 font-bold text-[10px]">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                    <span>Incomplete ({getMissingFieldsCount()} fields missing)</span>
+                  </div>
+                  <Link
+                    href="/settings"
+                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:underline block"
+                  >
+                    Complete profile setup now →
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Confirmation Transition Modal */}
-      <Modal
-        isOpen={statusModalOpen}
-        onClose={() => setStatusModalOpen(false)}
-        title={`Change Quotation Status to ${targetStatus}`}
-        footer={
-          <>
-            <button
-              onClick={() => setStatusModalOpen(false)}
-              className="px-4 py-2 border border-slate-300 rounded-lg text-xs text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => handleStatusTransition(targetStatus)}
-              disabled={updatingStatus}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors"
-            >
-              {updatingStatus ? 'Updating...' : 'Confirm Status Change'}
-            </button>
-          </>
-        }
-      >
-        <p className="text-xs text-slate-650">
-          Are you sure you want to transition this quotation to <span className="font-bold text-slate-900">{targetStatus}</span>?
-        </p>
-        <p className="mt-2 text-[10px] text-slate-500 leading-relaxed">
-          {targetStatus === 'SENT' && 'This locks direct drafting mode edits. Future updates must represent status acceptances or rejections.'}
-          {targetStatus === 'ACCEPTED' && 'This confirms customer agreement. You can reference this quotation to issue Proforma or standard invoices in subsequent workflows.'}
-        </p>
-      </Modal>
+      {/* Share proposal modal */}
+      {isShareModalOpen && (
+        <Modal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          title="Share Quotation"
+        >
+          <div className="space-y-4 text-xs">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Recipient Email</label>
+              <input
+                type="email"
+                value={shareForm.recipientEmail}
+                onChange={(e) => setShareForm({ ...shareForm, recipientEmail: e.target.value })}
+                placeholder={document?.clientSnapshot?.email || 'client@company.com'}
+                className="w-full form-input text-xs text-slate-900 bg-white"
+              />
+            </div>
+
+            <div className="flex justify-between pt-6 border-t border-slate-850">
+              <button
+                onClick={() => handleShare('whatsapp')}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow"
+              >
+                Share on WhatsApp
+              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsShareModalOpen(false)}
+                  className="px-4 py-2 border border-slate-700 text-slate-400 hover:bg-slate-850 hover:text-white rounded-lg text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleShare('email')}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow animate-pulse"
+                >
+                  Send Email Proposal
+                </button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
