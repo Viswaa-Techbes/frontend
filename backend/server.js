@@ -34,6 +34,7 @@ app.get('/api/health', (_req, res) => {
 
 // ── API routes ───────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
+app.use('/auth', authRoutes); // Fallback for Nginx path stripping
 app.use('/api/business', businessRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/documents', documentRoutes);
@@ -47,9 +48,20 @@ app.use((_req, res) => {
 // ── Error handler (must be last) ─────────────────────────────────────
 app.use(errorHandler);
 
+const { runProvisioning } = require('./scripts/createAdmin');
+
 // ── Start server ─────────────────────────────────────────────────────
 const start = async () => {
   await connectDB();
+  
+  // Auto-provision admin user on startup
+  try {
+    await runProvisioning();
+    console.log('Admin user auto-provisioning completed successfully.');
+  } catch (err) {
+    console.error('Failed to auto-provision admin user:', err);
+  }
+
   app.listen(env.port, () => {
     console.log(`Server running in ${env.nodeEnv} mode on port ${env.port}`);
   });

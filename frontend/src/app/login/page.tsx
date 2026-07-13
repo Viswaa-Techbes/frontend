@@ -127,12 +127,7 @@ function LoginForm() {
           </form>
         </div>
 
-        <p className="text-center text-sm text-slate-400">
-          Don&apos;t have an account?{' '}
-          <Link href="/register" className="font-semibold text-indigo-400 hover:text-indigo-300 transition-colors">
-            Create an account
-          </Link>
-        </p>
+
       </div>
     </div>
   );

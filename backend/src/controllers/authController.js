@@ -3,9 +3,7 @@ const authService = require('../services/authService');
 
 /** POST /api/auth/register */
 const register = asyncHandler(async (req, res) => {
-  const { name, email, password } = req.body;
-  const result = await authService.register({ name, email, password });
-  res.status(201).json({ success: true, data: result });
+  res.status(403).json({ success: false, message: 'Public registration is disabled.' });
 });
 
 /** POST /api/auth/login */

@@ -17,15 +17,9 @@ export default function Home() {
         <div className="flex items-center gap-4">
           <Link
             href="/login"
-            className="text-sm font-semibold text-slate-300 hover:text-white transition-colors"
-          >
-            Sign In
-          </Link>
-          <Link
-            href="/register"
             className="text-sm font-semibold text-white px-4 py-2 rounded-xl btn-primary shadow-lg shadow-indigo-500/15"
           >
-            Get Started
+            Sign In
           </Link>
         </div>
       </header>
@@ -46,14 +40,8 @@ export default function Home() {
 
         <div className="flex flex-col sm:flex-row gap-4 items-center justify-center">
           <Link
-            href="/register"
-            className="w-full sm:w-auto text-center px-8 py-4 rounded-xl text-base font-semibold text-white btn-primary shadow-xl shadow-indigo-500/20"
-          >
-            Create Your Account
-          </Link>
-          <Link
             href="/login"
-            className="w-full sm:w-auto text-center px-8 py-4 rounded-xl text-base font-semibold text-slate-300 bg-slate-900 border border-slate-800 hover:bg-slate-800/80 hover:text-white transition-all duration-200"
+            className="w-full sm:w-auto text-center px-8 py-4 rounded-xl text-base font-semibold text-white btn-primary shadow-xl shadow-indigo-500/20"
           >
             Sign In to Dashboard
           </Link>

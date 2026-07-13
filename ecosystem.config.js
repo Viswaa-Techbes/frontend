@@ -7,6 +7,7 @@ module.exports = {
       instances: 1,
       exec_mode: 'fork',
       env: {
+        PORT: 5001,
         NODE_ENV: 'production',
       },
     },
@@ -18,7 +19,7 @@ module.exports = {
       instances: 1,
       exec_mode: 'fork',
       env: {
-        PORT: 3000,
+        PORT: 3003,
         NODE_ENV: 'production',
       },
     },
