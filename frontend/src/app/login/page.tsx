@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -8,7 +8,7 @@ import Link from 'next/link';
 
 import BrandLogo from '@/components/BrandLogo';
 
-export default function LoginPage() {
+function LoginForm() {
   const { user, login, loading } = useAuth();
   const { showToast } = useToast();
   const router = useRouter();
@@ -137,3 +137,16 @@ export default function LoginPage() {
     </div>
   );
 }
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4 py-12 text-slate-400">
+        Loading...
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
+  );
+}
+

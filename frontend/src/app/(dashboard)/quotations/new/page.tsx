@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/lib/api';
@@ -34,7 +34,7 @@ interface AdditionalCharge {
   gstRate: number;
 }
 
-export default function NewQuotationPage() {
+function NewQuotationForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
@@ -2476,4 +2476,16 @@ function toIndianWordsLocal(num: number) {
     words += decimalWord.trim() + ' Paise';
   }
   return words + ' Only';
+}
+
+export default function NewQuotationPage() {
+  return (
+    <Suspense fallback={
+      <div className="card-panel p-16 rounded-xl flex items-center justify-center min-h-[300px]">
+        <LoadingSpinner size="md" />
+      </div>
+    }>
+      <NewQuotationForm />
+    </Suspense>
+  );
 }
