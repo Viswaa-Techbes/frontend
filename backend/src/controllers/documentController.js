@@ -56,6 +56,18 @@ const previewCalculations = asyncHandler(async (req, res) => {
   });
 });
 
+const getNextNumber = asyncHandler(async (req, res) => {
+  const { type } = req.query;
+  if (!type) {
+    return res.status(400).json({ success: false, message: 'Document type is required.' });
+  }
+  const data = await documentService.getNextNumber(req.user.id, type);
+  res.status(200).json({
+    success: true,
+    data,
+  });
+});
+
 // New handlers for Proforma Invoice & Invoice workflow additions
 const duplicateDocument = asyncHandler(async (req, res) => {
   const document = await documentService.duplicateDocument(req.params.id, req.user.id);
@@ -184,4 +196,5 @@ module.exports = {
   generateEWayBill,
   getEligibleInvoices,
   settleCredit,
+  getNextNumber,
 };

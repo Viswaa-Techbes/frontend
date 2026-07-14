@@ -8,19 +8,91 @@ const { DOCUMENT_PREFIX } = require('../utils/constants');
 
 /**
  * Generate atomic counter for document numbers (e.g. QT-00001)
+ * If no counter exists and userSubmittedNumber is provided, initialize the counter format from it.
  */
-const generateDocumentNumber = async (businessId, documentType) => {
-  const prefix = DOCUMENT_PREFIX[documentType] || 'DOC';
+const generateDocumentNumber = async (businessId, documentType, userSubmittedNumber = null) => {
   const counterId = `${businessId.toString()}_${documentType}`;
   
-  const counter = await Counter.findByIdAndUpdate(
+  // Try to find the existing counter
+  let counter = await Counter.findById(counterId);
+  
+  if (!counter) {
+    // If no counter exists, parse the user-supplied number or use the default prefix
+    let initialStr = userSubmittedNumber;
+    if (!initialStr || initialStr === 'Auto-generated') {
+      const defaultPrefix = DOCUMENT_PREFIX[documentType] || 'DOC';
+      initialStr = `${defaultPrefix}-00001`;
+    }
+    
+    // Parse initialStr
+    const match = initialStr.match(/(\d+)(?!.*\d)/);
+    let prefix = initialStr;
+    let suffix = '';
+    let seq = 1;
+    let padding = 4;
+    
+    if (match) {
+      const numStr = match[1];
+      const index = match.index;
+      prefix = initialStr.substring(0, index);
+      suffix = initialStr.substring(index + numStr.length);
+      seq = parseInt(numStr, 10);
+      padding = numStr.length;
+    }
+    
+    // Create the counter
+    try {
+      counter = await Counter.create({
+        _id: counterId,
+        seq,
+        prefix,
+        suffix,
+        padding,
+      });
+      return initialStr;
+    } catch (err) {
+      // In case of concurrent creation, read it again
+      counter = await Counter.findById(counterId);
+      if (!counter) {
+        throw err;
+      }
+    }
+  }
+  
+  // Counter exists, do atomic increment
+  const updatedCounter = await Counter.findByIdAndUpdate(
     counterId,
     { $inc: { seq: 1 } },
-    { new: true, upsert: true }
+    { new: true }
   );
+  
+  const parsedPrefix = updatedCounter.prefix !== undefined ? updatedCounter.prefix : (DOCUMENT_PREFIX[documentType] || 'DOC') + '-';
+  const parsedPadding = updatedCounter.padding !== undefined ? updatedCounter.padding : 5;
+  const parsedSuffix = updatedCounter.suffix !== undefined ? updatedCounter.suffix : '';
+  const seqStr = updatedCounter.seq.toString().padStart(parsedPadding, '0');
+  
+  return `${parsedPrefix}${seqStr}${parsedSuffix}`;
+};
 
-  const sequenceNum = counter.seq.toString().padStart(5, '0');
-  return `${prefix}-${sequenceNum}`;
+/**
+ * Get next document number preview
+ */
+const getNextNumber = async (userId, documentType) => {
+  const business = await BusinessProfile.findOne({ userId });
+  if (!business) {
+    throw ApiError.badRequest('Business profile not found.');
+  }
+  const counterId = `${business._id.toString()}_${documentType}`;
+  const counter = await Counter.findById(counterId);
+  if (!counter) {
+    return { exists: false, nextNumber: '' };
+  }
+  const parsedPrefix = counter.prefix !== undefined ? counter.prefix : (DOCUMENT_PREFIX[documentType] || 'DOC') + '-';
+  const parsedPadding = counter.padding !== undefined ? counter.padding : 5;
+  const parsedSuffix = counter.suffix !== undefined ? counter.suffix : '';
+  const nextSeq = counter.seq + 1;
+  const seqStr = nextSeq.toString().padStart(parsedPadding, '0');
+  return { exists: true, nextNumber: `${parsedPrefix}${seqStr}${parsedSuffix}` };
 };
 
 /**
@@ -251,6 +323,8 @@ const createDocument = async (userId, data) => {
 
   // Copy snapshots
   const businessSnapshot = business.toObject();
+  businessSnapshot.logo = business.logoUrl || business.logo;
+  businessSnapshot.signature = business.signatureUrl || business.signature;
   const clientSnapshot = client.toObject();
 
   // Run calculation
@@ -275,7 +349,7 @@ const createDocument = async (userId, data) => {
   }
 
   // Generate sequence code
-  const docNum = await generateDocumentNumber(business._id, documentType);
+  const docNum = await generateDocumentNumber(business._id, documentType, data.documentNumber);
 
   let availableCredit = 0;
   if (documentType === 'CREDIT_NOTE') {
@@ -401,7 +475,10 @@ const updateDocument = async (id, userId, data) => {
   }
 
   // Refresh business snapshot to make sure it is updated
-  document.businessSnapshot = business.toObject();
+  const businessSnapshot = business.toObject();
+  businessSnapshot.logo = business.logoUrl || business.logo;
+  businessSnapshot.signature = business.signatureUrl || business.signature;
+  document.businessSnapshot = businessSnapshot;
 
   // Run calculation
   const calculations = calculateDocumentTotals(data, business.address?.stateCode || 'DL');
@@ -895,4 +972,5 @@ module.exports = {
   generateEWayBill,
   getEligibleInvoices,
   settleCredit,
+  getNextNumber,
 };

@@ -12,6 +12,7 @@ router.post('/', validate(createDocumentRules), documentController.createDocumen
 router.get('/', documentController.getDocuments);
 router.post('/preview', documentController.previewCalculations);
 router.get('/eligible-invoices', documentController.getEligibleInvoices);
+router.get('/next-number', documentController.getNextNumber);
 
 // New specific routes (put specific routes BEFORE parameter routes or structure cleanly)
 router.post('/:id/settle-credit', documentController.settleCredit);

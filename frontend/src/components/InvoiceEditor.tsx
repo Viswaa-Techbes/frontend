@@ -77,6 +77,7 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
   const [docSubtitle, setDocSubtitle] = useState('');
   const [showSubtitleInput, setShowSubtitleInput] = useState(false);
   const [documentNumber, setDocumentNumber] = useState('Auto-generated');
+  const [isNumberEditable, setIsNumberEditable] = useState(false);
   const [poNumber, setPoNumber] = useState('');
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState(() => {
@@ -250,7 +251,13 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
         const profile = profileRes.data.data.business;
         setBusinessProfile(profile);
         currentBizId = profile._id;
-        setLogoBase64(profile.logo || '');
+        setLogoBase64(profile.logoUrl || profile.logo || '');
+        if (mode === 'create') {
+          setSignatureBase64(profile.signatureUrl || profile.signature || '');
+          setSignatoryName(profile.signatoryName || '');
+          setSignatoryDesignation(profile.designation || '');
+          setShowSignatureArea(!!(profile.signatureUrl || profile.signature));
+        }
         
         // Determine readiness status
         const isProfileIncomplete = !profile.businessName || !profile.address?.stateCode || !profile.gstin;
@@ -271,6 +278,24 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
       const clientsRes = await api.get('/clients?status=ACTIVE&limit=100');
       if (clientsRes.data?.success) {
         setClients(clientsRes.data.data.clients || []);
+      }
+
+      // Fetch next document number if in create mode
+      if (mode === 'create') {
+        try {
+          const numRes = await api.get('/documents/next-number?type=INVOICE');
+          if (numRes.data?.success) {
+            if (numRes.data.data.exists) {
+              setDocumentNumber(numRes.data.data.nextNumber);
+              setIsNumberEditable(false);
+            } else {
+              setDocumentNumber('');
+              setIsNumberEditable(true);
+            }
+          }
+        } catch (e) {
+          console.error("Error fetching next document number:", e);
+        }
       }
 
       // 3. Load from DB (Initial state)
@@ -1246,8 +1271,14 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
                   <input
                     type="text"
                     value={documentNumber}
-                    disabled
-                    className="w-full form-input text-xs font-semibold text-slate-500 bg-slate-50 cursor-not-allowed"
+                    onChange={(e) => setDocumentNumber(e.target.value)}
+                    disabled={!isNumberEditable}
+                    placeholder={isNumberEditable ? "Enter Invoice Number (e.g. INV-1001)" : "Auto-generated"}
+                    className={`w-full form-input text-xs font-semibold ${
+                      !isNumberEditable
+                        ? 'text-slate-500 bg-slate-50 cursor-not-allowed'
+                        : 'text-slate-900 bg-white'
+                    }`}
                   />
                 </div>
                 <div>
@@ -1672,15 +1703,6 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
                               onChange={(e) => handleUpdateItemRow(i, { quantity: Math.max(0.0001, parseFloat(e.target.value) || 0) })}
                               className="w-full form-input text-xs text-slate-900 bg-white"
                             />
-                            {displayOptions.displayUnitAs === 'Separate column' && (
-                              <input
-                                type="text"
-                                value={item.unit}
-                                onChange={(e) => handleUpdateItemRow(i, { unit: e.target.value })}
-                                placeholder="PCS"
-                                className="w-full form-input text-[10px] py-1 text-slate-500 bg-white uppercase font-bold"
-                              />
-                            )}
                           </td>
                         )}
 
@@ -1694,26 +1716,6 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
                               onChange={(e) => handleUpdateItemRow(i, { rate: Math.max(0, parseFloat(e.target.value) || 0) })}
                               className="w-full form-input text-xs font-semibold text-slate-900 bg-white"
                             />
-                            {/* Inline discount */}
-                            <div className="flex gap-1">
-                              <select
-                                value={item.discountType}
-                                onChange={(e) => handleUpdateItemRow(i, { discountType: e.target.value as any })}
-                                className="form-input py-0.5 px-1 text-[9px] text-slate-500 bg-white"
-                              >
-                                <option value="NONE">No Disc</option>
-                                <option value="PERCENTAGE">%</option>
-                                <option value="FIXED">Flat ₹</option>
-                              </select>
-                              {item.discountType !== 'NONE' && (
-                                <input
-                                  type="number"
-                                  value={item.discountValue}
-                                  onChange={(e) => handleUpdateItemRow(i, { discountValue: Math.max(0, parseFloat(e.target.value) || 0) })}
-                                  className="w-12 form-input py-0.5 px-1 text-[10px] text-slate-900 bg-white"
-                                />
-                              )}
-                            </div>
                           </td>
                         )}
 

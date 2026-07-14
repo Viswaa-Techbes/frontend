@@ -297,6 +297,6 @@ const salesDocumentSchema = new mongoose.Schema(
 
 // Indexes
 salesDocumentSchema.index({ businessId: 1, documentType: 1, createdAt: -1 });
-salesDocumentSchema.index({ businessId: 1, documentNumber: 1 }, { unique: true });
+salesDocumentSchema.index({ businessId: 1, documentType: 1, documentNumber: 1 }, { unique: true });
 
 module.exports = mongoose.model('SalesDocument', salesDocumentSchema);

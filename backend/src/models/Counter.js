@@ -9,6 +9,16 @@ const counterSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  prefix: {
+    type: String,
+  },
+  suffix: {
+    type: String,
+  },
+  padding: {
+    type: Number,
+  },
 });
 
 module.exports = mongoose.model('Counter', counterSchema);
+
