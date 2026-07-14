@@ -86,7 +86,7 @@ const autoMapColumns = (headers) => {
 /**
  * Run non-mutating validation, client matching, and duplicate checks
  */
-const validateImport = async (businessId, importType, rows, columnMapping) => {
+const validateImport = async (businessId, importType, rows, columnMapping, clientResolutions = {}) => {
   const business = await BusinessProfile.findById(businessId);
   if (!business) throw new Error('Business profile not found');
 
@@ -106,6 +106,63 @@ const validateImport = async (businessId, importType, rows, columnMapping) => {
     return mapped;
   };
 
+  const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[A-Z0-9]{1}Z[A-Z0-9]{1}$/i;
+
+  const findMatchingClient = async (clientName, rawData) => {
+    if (!clientName && !rawData.gstin && !rawData.email && !rawData.phone) {
+      return { client: null, conflict: false, matchedClients: [] };
+    }
+
+    // 1. GSTIN exact match
+    if (rawData.gstin) {
+      const clients = await Client.find({
+        businessId,
+        isDeleted: false,
+        gstin: rawData.gstin.trim().toUpperCase()
+      });
+      if (clients.length === 1) return { client: clients[0], conflict: false, matchedClients: clients };
+      if (clients.length > 1) return { client: null, conflict: true, matchedClients: clients };
+    }
+
+    // 2. Email normalized exact match
+    if (rawData.email) {
+      const clients = await Client.find({
+        businessId,
+        isDeleted: false,
+        email: rawData.email.trim().toLowerCase()
+      });
+      if (clients.length === 1) return { client: clients[0], conflict: false, matchedClients: clients };
+      if (clients.length > 1) return { client: null, conflict: true, matchedClients: clients };
+    }
+
+    // 3. Phone normalized exact match
+    if (rawData.phone) {
+      const clients = await Client.find({
+        businessId,
+        isDeleted: false,
+        phone: rawData.phone.trim()
+      });
+      if (clients.length === 1) return { client: clients[0], conflict: false, matchedClients: clients };
+      if (clients.length > 1) return { client: null, conflict: true, matchedClients: clients };
+    }
+
+    // 4. Client/company name normalized match
+    if (clientName) {
+      const clients = await Client.find({
+        businessId,
+        isDeleted: false,
+        $or: [
+          { clientName: { $regex: new RegExp(`^${clientName.trim()}$`, 'i') } },
+          { businessName: { $regex: new RegExp(`^${clientName.trim()}$`, 'i') } }
+        ]
+      });
+      if (clients.length === 1) return { client: clients[0], conflict: false, matchedClients: clients };
+      if (clients.length > 1) return { client: null, conflict: true, matchedClients: clients };
+    }
+
+    return { client: null, conflict: false, matchedClients: [] };
+  };
+
   if (importType === 'CLIENT') {
     for (let idx = 0; idx < rows.length; idx++) {
       const rowNum = idx + 2;
@@ -113,6 +170,11 @@ const validateImport = async (businessId, importType, rows, columnMapping) => {
       
       if (!rawData.clientName) {
         errors.push({ rowNumber: rowNum, status: 'MISSING_CLIENT_NAME', message: 'Client Name is required.', data: rawData });
+        continue;
+      }
+
+      if (rawData.gstin && !gstRegex.test(rawData.gstin.trim())) {
+        errors.push({ rowNumber: rowNum, status: 'INVALID_GSTIN', message: `GSTIN '${rawData.gstin}' is invalid.`, data: rawData });
         continue;
       }
 
@@ -137,8 +199,9 @@ const validateImport = async (businessId, importType, rows, columnMapping) => {
     for (let idx = 0; idx < rows.length; idx++) {
       const rowNum = idx + 2;
       const rawData = mapRow(rows[idx]);
+      const docNum = String(rawData.documentNumber || '').trim();
 
-      if (!rawData.documentNumber) {
+      if (!docNum) {
         errors.push({ rowNumber: rowNum, status: 'MISSING_RECEIPT_NUMBER', message: 'Receipt number is required.', data: rawData });
         continue;
       }
@@ -148,16 +211,20 @@ const validateImport = async (businessId, importType, rows, columnMapping) => {
       }
 
       // Check duplicates
-      const existingReceipt = await PaymentReceipt.findOne({ businessId, receiptNumber: rawData.documentNumber });
+      const existingReceipt = await PaymentReceipt.findOne({ businessId, receiptNumber: docNum });
       
       // Match client
       let client = null;
-      if (rawData.clientName) {
-        client = await Client.findOne({
-          businessId,
-          isDeleted: false,
-          clientName: { $regex: new RegExp(`^${rawData.clientName.trim()}$`, 'i') }
-        });
+      let conflict = false;
+      let matchedClients = [];
+
+      if (clientResolutions && clientResolutions[docNum]) {
+        client = await Client.findOne({ businessId, _id: clientResolutions[docNum], isDeleted: false });
+      } else {
+        const matchRes = await findMatchingClient(rawData.clientName, rawData);
+        client = matchRes.client;
+        conflict = matchRes.conflict;
+        matchedClients = matchRes.matchedClients;
       }
 
       // Match invoice
@@ -170,16 +237,24 @@ const validateImport = async (businessId, importType, rows, columnMapping) => {
         });
       }
 
-      const statusDetails = { rowNumber: rowNum, data: rawData };
+      const statusDetails = { rowNumber: rowNum, documentNumber: docNum, data: rawData };
       if (existingReceipt) {
         duplicates.push({ ...statusDetails, status: 'DUPLICATE_RECEIPT', message: `Receipt ${rawData.documentNumber} already exists.` });
+      } else if (conflict) {
+        errors.push({
+          ...statusDetails,
+          status: 'CLIENT_MATCH_CONFLICT',
+          message: `Multiple matching clients found for '${rawData.clientName}'.`,
+          matchedClients: matchedClients.map(c => ({ _id: c._id, clientName: c.clientName, companyName: c.companyName || c.businessName, gstin: c.gstin }))
+        });
       } else if (!client) {
-        errors.push({ ...statusDetails, status: 'CLIENT_MATCH_CONFLICT', message: `Client '${rawData.clientName}' not found.` });
+        errors.push({ ...statusDetails, status: 'CLIENT_MATCH_CONFLICT', message: `Client '${rawData.clientName}' not found.`, canAutoCreate: true });
       } else {
         if (rawData.referenceNumber && !invoice) {
-          warnings.push({ ...statusDetails, status: 'LINKED_INVOICE_NOT_FOUND', message: `Linked invoice ${rawData.referenceNumber} not found in this tenant.` });
+          warnings.push({ ...statusDetails, status: 'LINKED_INVOICE_NOT_FOUND', message: `Linked invoice ${rawData.referenceNumber} not found in this tenant.`, clientId: client._id });
+        } else {
+          valid.push({ ...statusDetails, status: 'VALID', clientId: client._id });
         }
-        valid.push({ ...statusDetails, status: 'VALID', clientId: client._id });
       }
     }
   } else {
@@ -222,9 +297,9 @@ const validateImport = async (businessId, importType, rows, columnMapping) => {
           hasConflictingHeaders = true;
         }
 
-        const qty = parseFloat(row.quantity) || 1;
-        const rate = parseFloat(row.rate) || 0;
-        const gstRate = parseFloat(row.gstRate) || 0;
+        const qty = parseFloat(row.quantity) ?? 1;
+        const rate = parseFloat(row.rate) ?? 0;
+        const gstRate = parseFloat(row.gstRate) ?? 0;
 
         items.push({
           itemName: row.itemName || 'Item Details',
@@ -239,29 +314,6 @@ const validateImport = async (businessId, importType, rows, columnMapping) => {
         totalExcelGrandTotal += parseFloat(row.grandTotal) || (qty * rate * (1 + gstRate / 100));
       }
 
-      if (hasConflictingHeaders) {
-        errors.push({
-          rowNumber: group.firstRowNum,
-          status: 'VALIDATION_CONFLICT',
-          message: `Document ${docNum} rows contain conflicting client details or dates.`,
-          data: firstRow,
-        });
-        continue;
-      }
-
-      // Check duplicate document
-      const existingDoc = await SalesDocument.findOne({ businessId, documentType: importType, documentNumber: docNum });
-
-      // Match client
-      let client = null;
-      if (clientName) {
-        client = await Client.findOne({
-          businessId,
-          isDeleted: false,
-          clientName: { $regex: new RegExp(`^${clientName.trim()}$`, 'i') }
-        });
-      }
-
       const statusDetails = {
         rowNumber: group.firstRowNum,
         documentNumber: docNum,
@@ -273,10 +325,75 @@ const validateImport = async (businessId, importType, rows, columnMapping) => {
         },
       };
 
+      if (hasConflictingHeaders) {
+        errors.push({
+          ...statusDetails,
+          status: 'VALIDATION_CONFLICT',
+          message: `Document ${docNum} rows contain conflicting client details or dates.`,
+        });
+        continue;
+      }
+
+      if (!issueDate || isNaN(Date.parse(issueDate))) {
+        errors.push({
+          ...statusDetails,
+          status: 'INVALID_DATE',
+          message: `Issue date '${issueDate}' is invalid.`,
+        });
+        continue;
+      }
+
+      let hasInvalidQty = false;
+      let hasInvalidRate = false;
+      for (const row of group.rows) {
+        const qty = parseFloat(row.quantity);
+        const rate = parseFloat(row.rate);
+        if (isNaN(qty) || qty < 0) hasInvalidQty = true;
+        if (isNaN(rate) || rate < 0) hasInvalidRate = true;
+      }
+
+      if (hasInvalidQty) {
+        errors.push({ ...statusDetails, status: 'INVALID_QUANTITY', message: `Document contains invalid quantity values.` });
+        continue;
+      }
+      if (hasInvalidRate) {
+        errors.push({ ...statusDetails, status: 'INVALID_RATE', message: `Document contains invalid rate values.` });
+        continue;
+      }
+
+      if (firstRow.gstin && !gstRegex.test(firstRow.gstin.trim())) {
+        errors.push({ ...statusDetails, status: 'INVALID_GSTIN', message: `GSTIN '${firstRow.gstin}' is invalid.` });
+        continue;
+      }
+
+      // Check duplicate document
+      const existingDoc = await SalesDocument.findOne({ businessId, documentType: importType, documentNumber: docNum });
+
+      // Match client
+      let client = null;
+      let conflict = false;
+      let matchedClients = [];
+
+      if (clientResolutions && clientResolutions[docNum]) {
+        client = await Client.findOne({ businessId, _id: clientResolutions[docNum], isDeleted: false });
+      } else {
+        const matchRes = await findMatchingClient(clientName, firstRow);
+        client = matchRes.client;
+        conflict = matchRes.conflict;
+        matchedClients = matchRes.matchedClients;
+      }
+
       if (existingDoc) {
         duplicates.push({ ...statusDetails, status: 'DUPLICATE_DOCUMENT', message: `${importType} ${docNum} already exists.` });
+      } else if (conflict) {
+        errors.push({
+          ...statusDetails,
+          status: 'CLIENT_MATCH_CONFLICT',
+          message: `Multiple matching clients found for '${clientName}'.`,
+          matchedClients: matchedClients.map(c => ({ _id: c._id, clientName: c.clientName, companyName: c.companyName || c.businessName, gstin: c.gstin }))
+        });
       } else if (!client) {
-        errors.push({ ...statusDetails, status: 'CLIENT_MATCH_CONFLICT', message: `Client '${clientName}' not found.` });
+        errors.push({ ...statusDetails, status: 'CLIENT_MATCH_CONFLICT', message: `Client '${clientName}' not found.`, canAutoCreate: true });
       } else {
         // Run pricing calculation verification
         const calculations = documentService.calculateDocumentTotals({
@@ -288,20 +405,42 @@ const validateImport = async (businessId, importType, rows, columnMapping) => {
         const calculatedTotal = calculations.grandTotal;
         const excelTotal = parseFloat(firstRow.grandTotal) || totalExcelGrandTotal;
 
-        if (Math.abs(calculatedTotal - excelTotal) > 1.0) {
+        // Check numbering format conflict
+        const counterId = `${businessId.toString()}_${importType}`;
+        const counter = await Counter.findById(counterId);
+        let numberingFormatConflict = false;
+        if (counter && counter.prefix) {
+          const match = docNum.match(/(\d+)(?!.*\d)/);
+          if (match) {
+            const prefix = docNum.substring(0, match.index);
+            if (prefix !== counter.prefix) numberingFormatConflict = true;
+          } else {
+            numberingFormatConflict = true;
+          }
+        }
+
+        const payload = {
+          ...statusDetails,
+          clientId: client._id,
+          calculatedTotals: calculations,
+        };
+
+        if (numberingFormatConflict) {
           warnings.push({
-            ...statusDetails,
+            ...payload,
+            status: 'NUMBERING_FORMAT_WARNING',
+            message: `Document number format '${docNum}' does not match the active counter prefix '${counter ? counter.prefix : ''}'.`,
+          });
+        } else if (Math.abs(calculatedTotal - excelTotal) > 1.0) {
+          warnings.push({
+            ...payload,
             status: 'TOTAL_MISMATCH',
             message: `Grand Total mismatch. Excel: ₹${excelTotal.toFixed(2)}, System: ₹${calculatedTotal.toFixed(2)}`,
-            clientId: client._id,
-            calculatedTotals: calculations,
           });
         } else {
           valid.push({
-            ...statusDetails,
+            ...payload,
             status: 'VALID',
-            clientId: client._id,
-            calculatedTotals: calculations,
           });
         }
       }
@@ -314,21 +453,18 @@ const validateImport = async (businessId, importType, rows, columnMapping) => {
 /**
  * Execute actual batch import to database
  */
-const executeImport = async (businessId, userId, importType, rows, columnMapping, duplicatePolicy, calculatePolicy) => {
+const executeImport = async (businessId, userId, importType, rows, columnMapping, duplicatePolicy, calculatePolicy, clientResolutions = {}, autoCreateClients = false) => {
   const business = await BusinessProfile.findById(businessId);
   const businessSnapshot = business.toObject();
   businessSnapshot.logo = business.logoUrl || business.logo;
   businessSnapshot.signature = business.signatureUrl || business.signature;
 
-  const validation = await validateImport(businessId, importType, rows, columnMapping);
+  const validation = await validateImport(businessId, importType, rows, columnMapping, clientResolutions);
   
   let importedCount = 0;
   let skippedCount = 0;
   let duplicateCount = 0;
 
-  // 1. Process duplicates based on policy
-  const toImport = [];
-  
   // Combine valid and warnings as importable
   const importableList = [...validation.valid, ...validation.warnings];
 
@@ -336,7 +472,6 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
     duplicateCount += validation.duplicates.length;
     skippedCount += validation.duplicates.length;
   } else if (duplicatePolicy === 'OVERWRITE') {
-    // We will delete existing documents matching the duplicates before saving
     for (const dup of validation.duplicates) {
       if (importType === 'CLIENT') {
         await Client.deleteMany({ businessId, clientName: dup.data.clientName, isDeleted: false });
@@ -349,12 +484,12 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
     importableList.push(...validation.duplicates);
   }
 
-  // 2. Perform database writes
   if (importType === 'CLIENT') {
     for (const rec of importableList) {
       const d = rec.data;
       await Client.create({
         businessId,
+        clientType: 'BUSINESS',
         clientName: d.clientName,
         companyName: d.companyName || '',
         email: d.email || '',
@@ -375,13 +510,40 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
   } else if (importType === 'PAYMENT_RECEIPT') {
     for (const rec of importableList) {
       const d = rec.data;
-      const client = await Client.findById(rec.clientId);
-      const clientSnapshot = client.toObject();
+      
+      let client = null;
+      if (rec.clientId) {
+        client = await Client.findById(rec.clientId);
+      }
+      
+      if (!client && autoCreateClients && d.clientName) {
+        client = await Client.create({
+          businessId,
+          clientType: 'BUSINESS',
+          clientName: d.clientName,
+          companyName: d.companyName || '',
+          email: d.email || '',
+          phone: d.phone || '',
+          gstin: d.gstin || '',
+          billingAddress: {
+            addressLine1: d.addressLine1 || '',
+            city: d.city || '',
+            state: d.state || '',
+            pincode: d.pincode || '',
+            country: d.country || 'India',
+          },
+          createdBy: userId,
+          status: 'ACTIVE',
+        });
+      }
 
+      if (!client) continue;
+
+      const clientSnapshot = client.toObject();
       const receiptAmount = parseFloat(d.grandTotal);
       
       const receipt = await PaymentReceipt.create({
-        receiptNumber: d.documentNumber,
+        receiptNumber: rec.documentNumber || d.documentNumber,
         businessId,
         businessSnapshot,
         clientId: client._id,
@@ -449,19 +611,54 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
 
     for (const rec of importableList) {
       const d = rec.data;
-      const client = await Client.findById(rec.clientId);
-      const clientSnapshot = client.toObject();
+      
+      let client = null;
+      if (rec.clientId) {
+        client = await Client.findById(rec.clientId);
+      }
 
+      if (!client && autoCreateClients && rec.clientName) {
+        client = await Client.create({
+          businessId,
+          clientType: 'BUSINESS',
+          clientName: rec.clientName,
+          companyName: d.companyName || '',
+          email: d.email || '',
+          phone: d.phone || '',
+          gstin: d.gstin || '',
+          billingAddress: {
+            addressLine1: d.addressLine1 || '',
+            city: d.city || '',
+            state: d.state || '',
+            pincode: d.pincode || '',
+            country: d.country || 'India',
+          },
+          createdBy: userId,
+          status: 'ACTIVE',
+        });
+      }
+
+      if (!client) continue;
+
+      const clientSnapshot = client.toObject();
       let calcs = rec.calculatedTotals;
-      // If calculatePolicy is System, we use calculations from calculations service.
-      // If policy is Excel, we override the grandTotal with the Excel grand total
+
       if (calculatePolicy === 'EXCEL') {
         const excelTotal = parseFloat(d.grandTotal) || calcs.grandTotal;
         calcs.grandTotal = excelTotal;
         calcs.balanceDue = excelTotal;
       }
 
-      await SalesDocument.create({
+      let linkedInvoice = null;
+      if (importType === 'CREDIT_NOTE' && d.linkedInvoiceNumber) {
+        linkedInvoice = await SalesDocument.findOne({
+          businessId,
+          documentType: 'INVOICE',
+          documentNumber: d.linkedInvoiceNumber
+        });
+      }
+
+      const docData = {
         businessId,
         clientId: client._id,
         documentType: importType,
@@ -481,9 +678,45 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
         status: 'ISSUED',
         createdBy: userId,
         importSource: 'EXCEL',
-      });
+      };
 
-      // Counter Sync: parse the seq from documentNumber to check if we need to advance the counter
+      if (importType === 'CREDIT_NOTE' && linkedInvoice) {
+        docData.linkedInvoiceId = linkedInvoice._id;
+        docData.linkedInvoiceSnapshot = linkedInvoice.toObject();
+        docData.reason = d.reason || 'Product Return';
+        docData.settledCreditAmount = calcs.grandTotal;
+        docData.availableCreditAmount = 0;
+        docData.settlementReferences = [{
+          invoiceId: linkedInvoice._id,
+          invoiceNumberSnapshot: linkedInvoice.documentNumber,
+          amount: calcs.grandTotal
+        }];
+
+        const newBalance = Math.max(0, (linkedInvoice.balanceDue ?? linkedInvoice.grandTotal) - calcs.grandTotal);
+        linkedInvoice.balanceDue = newBalance;
+        if (newBalance === 0) {
+          linkedInvoice.paymentStatus = 'PAID';
+        } else if (newBalance < linkedInvoice.grandTotal) {
+          linkedInvoice.paymentStatus = 'PARTIALLY_PAID';
+        }
+        linkedInvoice.linkedDocuments = linkedInvoice.linkedDocuments || [];
+        linkedInvoice.linkedDocuments.push({
+          documentId: null, // set to createdDoc._id afterwards
+          documentType: 'CREDIT_NOTE',
+          documentNumber: rec.documentNumber,
+          relationType: 'CREDIT_NOTE',
+        });
+      }
+
+      const createdDoc = await SalesDocument.create(docData);
+
+      if (importType === 'CREDIT_NOTE' && linkedInvoice) {
+        const lastLinked = linkedInvoice.linkedDocuments[linkedInvoice.linkedDocuments.length - 1];
+        if (lastLinked) lastLinked.documentId = createdDoc._id;
+        await linkedInvoice.save();
+      }
+
+      // Counter Sync
       const match = rec.documentNumber.match(/(\d+)(?!.*\d)/);
       if (match) {
         const seqVal = parseInt(match[1], 10);
@@ -494,7 +727,7 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
       importedCount++;
     }
 
-    // Safely advance counter if maximum sequence of imported docs is higher than existing counter
+    // Safely advance counter
     if (maxCounterSeq > 0) {
       const counterId = `${businessId.toString()}_${importType}`;
       const existingCounter = await Counter.findById(counterId);

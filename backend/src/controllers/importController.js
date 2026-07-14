@@ -12,6 +12,13 @@ const uploadAndPreview = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('Please upload an Excel or CSV file.');
   }
 
+  const originalname = req.file.originalname;
+  const allowedExtensions = ['.xlsx', '.xls', '.csv'];
+  const ext = originalname.substring(originalname.lastIndexOf('.')).toLowerCase();
+  if (!allowedExtensions.includes(ext)) {
+    throw ApiError.badRequest('Invalid file format. Only .xlsx, .xls, and .csv are allowed.');
+  }
+
   const { sheetName } = req.body;
   const result = importService.parseExcel(req.file.buffer, sheetName);
   
@@ -37,7 +44,7 @@ const uploadAndPreview = asyncHandler(async (req, res) => {
  * POST /api/imports/validate
  */
 const validateImport = asyncHandler(async (req, res) => {
-  const { importType, rows, columnMapping } = req.body;
+  const { importType, rows, columnMapping, clientResolutions = {} } = req.body;
   
   if (!importType || !rows || !columnMapping) {
     throw ApiError.badRequest('importType, rows, and columnMapping are required.');
@@ -48,7 +55,7 @@ const validateImport = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('Please complete your Business Profile first.');
   }
 
-  const result = await importService.validateImport(business._id, importType, rows, columnMapping);
+  const result = await importService.validateImport(business._id, importType, rows, columnMapping, clientResolutions);
   
   res.json({
     success: true,
@@ -60,7 +67,7 @@ const validateImport = asyncHandler(async (req, res) => {
  * POST /api/imports/confirm
  */
 const confirmImport = asyncHandler(async (req, res) => {
-  const { importType, rows, columnMapping, duplicatePolicy = 'SKIP', calculatePolicy = 'SYSTEM' } = req.body;
+  const { importType, rows, columnMapping, duplicatePolicy = 'SKIP', calculatePolicy = 'SYSTEM', clientResolutions = {}, autoCreateClients = false } = req.body;
 
   if (!importType || !rows || !columnMapping) {
     throw ApiError.badRequest('importType, rows, and columnMapping are required.');
@@ -78,7 +85,9 @@ const confirmImport = asyncHandler(async (req, res) => {
     rows,
     columnMapping,
     duplicatePolicy,
-    calculatePolicy
+    calculatePolicy,
+    clientResolutions,
+    autoCreateClients
   );
 
   res.json({
