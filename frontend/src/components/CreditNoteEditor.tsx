@@ -691,8 +691,8 @@ export default function CreditNoteEditor({ initialId }: CreditNoteEditorProps) {
                 />
               </div>
 
-              {businessProfile?.logo ? (
-                <img src={businessProfile.logo} alt="Business Logo" className="w-32 max-h-20 object-contain ml-auto" />
+              {businessProfile?.logoUrl || businessProfile?.logo ? (
+                <img src={businessProfile.logoUrl || businessProfile.logo} alt="Business Logo" className="w-32 max-h-20 object-contain ml-auto" />
               ) : (
                 <div className="w-32 h-16 border border-dashed border-slate-300 rounded-xl flex items-center justify-center text-slate-400 text-[10px]">
                   No logo configured

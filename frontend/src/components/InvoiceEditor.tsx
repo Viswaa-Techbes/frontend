@@ -591,8 +591,31 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
       setEnableDocDiscount(false);
       setDocDiscountValue(0);
       setAdditionalCharges([]);
-      setTerms('');
-      setNotes('');
+      
+      if (businessProfile?.defaultTerms) {
+        setTerms(businessProfile.defaultTerms);
+        setShowTermsArea(true);
+      } else {
+        setTerms('');
+        setShowTermsArea(false);
+      }
+
+      if (businessProfile?.defaultNotes) {
+        setNotes(businessProfile.defaultNotes);
+        setShowNotesArea(true);
+      } else {
+        setNotes('');
+        setShowNotesArea(false);
+      }
+
+      if (businessProfile?.defaultFooter) {
+        setFooter(businessProfile.defaultFooter);
+        setShowFooterArea(true);
+      } else {
+        setFooter('');
+        setShowFooterArea(false);
+      }
+
       setAttachments([]);
       setAdditionalInfo([]);
       setContactDetails({ name: '', phone: '', email: '' });
