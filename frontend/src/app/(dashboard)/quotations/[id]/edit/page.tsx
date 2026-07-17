@@ -435,7 +435,11 @@ export default function EditQuotationPage() {
       const response = await api.put(`/documents/${id}`, payload);
       if (response.data?.success) {
         showToast('Quotation updated successfully!', 'success');
+        setSaving(false);
         router.push(`/quotations/${id}`);
+        return;
+      } else {
+        showToast(response.data?.message || 'Failed to update quotation. Please try again.', 'error');
       }
     } catch (err: any) {
       showToast(err.response?.data?.message || 'Failed to update quotation.', 'error');
