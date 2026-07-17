@@ -94,3 +94,109 @@ body {
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
+
+/* Print Media Styles */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 15mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 10pt !important;
+    line-height: 1.35 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide non-printable elements */
+  .print\:hidden,
+  aside,
+  header,
+  nav,
+  button,
+  a:not([href^="http"]),
+  .no-print,
+  .print-hide {
+    display: none !important;
+  }
+
+  /* Reset layout grids and panels for full page width */
+  .flex-1,
+  main,
+  .max-w-7xl,
+  .max-w-4xl,
+  .max-w-[1440px],
+  .animate-fadeIn,
+  .grid,
+  .grid-cols-1,
+  .xl:grid-cols-4,
+  .xl:col-span-3 {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: transparent !important;
+  }
+
+  /* Printable container styling */
+  .printable-document {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    font-family: inherit !important;
+  }
+
+  /* Keep table structure intact, repeat header, avoid break inside rows */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+
+  th, td {
+    padding: 6px 8px !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+  }
+
+  /* Prevent page breaks in specific key sections */
+  .print-avoid-break,
+  .totals-section,
+  .signature-section,
+  .header-section,
+  .client-metadata-section {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Page number counter */
+  .page-number::after {
+    content: "Page " counter(page);
+  }
+}
+

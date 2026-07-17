@@ -21,6 +21,14 @@ export default function ProformaInvoiceDetailsPage({ params }: ProformaInvoiceDe
   const docId = params.id;
   const printRef = useRef<HTMLDivElement>(null);
 
+  const formatImageSrc = (src: string) => {
+    if (!src) return '';
+    if (src.startsWith('data:image/') || src.startsWith('http://') || src.startsWith('https://')) {
+      return src;
+    }
+    return `data:image/png;base64,${src}`;
+  };
+
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -345,7 +353,7 @@ export default function ProformaInvoiceDetailsPage({ params }: ProformaInvoiceDe
           </Link>
           <button
             onClick={handlePrint}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-colors"
+            className="px-4 py-2 border border-blue-200 text-blue-600 hover:bg-blue-50 font-bold rounded-xl transition-all"
           >
             Print / PDF
           </button>
@@ -469,249 +477,264 @@ export default function ProformaInvoiceDetailsPage({ params }: ProformaInvoiceDe
         <div className="xl:col-span-3 space-y-6">
           <div
             ref={printRef}
-            className={`card-panel p-12 sm:p-16 rounded-2xl bg-white shadow-md border border-slate-250 min-h-[1100px] text-xs leading-relaxed max-w-4A mx-auto ${
+            className={`printable-document card-panel p-12 sm:p-16 rounded-2xl bg-white shadow-md border border-slate-255 min-h-[1100px] text-xs leading-relaxed max-w-4xl mx-auto flex flex-col justify-between ${
               localSettings.design.tableStyle === 'Striped' ? 'print-striped' : ''
             }`}
             style={{ fontFamily: localSettings.design.fontFamily === 'Courier' ? 'Courier New, monospace' : 'inherit' }}
           >
-            {/* Template Header layout mapping */}
-            <div className={`flex justify-between items-start border-b border-slate-200 pb-8 ${
-              localSettings.design.headerAlignment === 'Center' ? 'flex-col items-center text-center' : ''
-            }`}>
-              {/* Logo block */}
-              {document.businessSnapshot?.logo && (
-                <div className={`mb-4 ${
-                  localSettings.design.logoPosition === 'Right' ? 'order-last' : 'order-first'
-                }`}>
-                  <img src={document.businessSnapshot.logo} alt="Logo" className="w-32 max-h-20 object-contain" />
+            {/* Top section */}
+            <div className="space-y-6 flex-1">
+              {/* Redesigned Header: Logo (left), Business Info (right) */}
+              <div className="flex justify-between items-start border-b border-slate-200 pb-6 print-avoid-break">
+                <div className="flex-1">
+                  {document.businessSnapshot?.logo ? (
+                    <img src={formatImageSrc(document.businessSnapshot.logo)} alt="Logo" className="w-40 max-h-24 object-contain" />
+                  ) : (
+                    <div className="h-12"></div>
+                  )}
                 </div>
-              )}
-
-              {/* Billed By Details */}
-              <div className="space-y-1 text-slate-600">
-                <h2 className="text-lg font-black text-slate-900">{document.businessSnapshot?.businessName}</h2>
-                <p>{document.businessSnapshot?.address?.addressLine1}</p>
-                {document.businessSnapshot?.address?.addressLine2 && <p>{document.businessSnapshot.address.addressLine2}</p>}
-                <p>{document.businessSnapshot?.address?.city}, {document.businessSnapshot?.address?.state} - {document.businessSnapshot?.address?.pincode}</p>
-                {document.businessSnapshot?.gstin && <p><span className="font-bold text-slate-450 uppercase">GSTIN:</span> {document.businessSnapshot.gstin}</p>}
-                {document.businessSnapshot?.pan && <p><span className="font-bold text-slate-450 uppercase">PAN:</span> {document.businessSnapshot.pan}</p>}
-                <p className="text-slate-450">{document.businessSnapshot?.email} | {document.businessSnapshot?.phone}</p>
+                
+                <div className="text-right text-slate-600 space-y-1 max-w-md">
+                  <h2 className="text-lg font-black text-slate-900">{document.businessSnapshot?.businessName}</h2>
+                  <p className="text-xs">{document.businessSnapshot?.address?.addressLine1}</p>
+                  {document.businessSnapshot?.address?.addressLine2 && <p className="text-xs">{document.businessSnapshot.address.addressLine2}</p>}
+                  <p className="text-xs">{document.businessSnapshot?.address?.city}, {document.businessSnapshot?.address?.state} - {document.businessSnapshot?.address?.pincode}</p>
+                  {document.businessSnapshot?.gstin && <p className="text-xs"><span className="font-bold text-slate-500 uppercase">GSTIN:</span> {document.businessSnapshot.gstin}</p>}
+                  {document.businessSnapshot?.pan && <p className="text-xs"><span className="font-bold text-slate-500 uppercase">PAN:</span> {document.businessSnapshot.pan}</p>}
+                  <p className="text-xs text-slate-500">{document.businessSnapshot?.email} | {document.businessSnapshot?.phone}</p>
+                </div>
               </div>
-            </div>
 
-            {/* Title / Numbers Header info */}
-            <div className="grid grid-cols-2 gap-8 border-b border-slate-200 py-6">
-              <div>
-                <h1 className="text-xl font-black text-slate-900">{document.title || 'Proforma Invoice'}</h1>
-                {document.subtitle && <p className="text-xs text-slate-500 font-medium mt-1">{document.subtitle}</p>}
+              {/* Title / Numbers Header info */}
+              <div className="text-center py-4 border-b border-slate-100 print-avoid-break">
+                <h1 className="text-2xl font-black text-slate-900 tracking-wide uppercase">{document.title || 'Proforma Invoice'}</h1>
+                {document.subtitle && <p className="text-xs text-slate-500 mt-0.5">{document.subtitle}</p>}
+              </div>
 
-                <div className="mt-4 space-y-1 text-slate-600">
-                  <p className="font-bold text-slate-900 uppercase text-[9px] tracking-wider mb-1">QUOTATION FOR</p>
+              {/* Client & Document Metadata Row */}
+              <div className="grid grid-cols-2 gap-8 py-6 border-b border-slate-200 print-avoid-break">
+                <div className="space-y-1 text-slate-600">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">QUOTATION FOR</p>
                   <p className="font-bold text-slate-900">{document.clientSnapshot?.businessName || document.clientSnapshot?.clientName}</p>
-                  <p>{document.clientSnapshot?.billingAddress?.addressLine1}</p>
-                  <p>{document.clientSnapshot?.billingAddress?.city}, {document.clientSnapshot?.billingAddress?.state} - {document.clientSnapshot?.billingAddress?.pincode}</p>
-                  {document.clientSnapshot?.gstin && <p><span className="font-bold text-slate-450 uppercase">GSTIN:</span> {document.clientSnapshot.gstin}</p>}
+                  <p className="text-xs">{document.clientSnapshot?.billingAddress?.addressLine1}</p>
+                  <p className="text-xs">{document.clientSnapshot?.billingAddress?.city}, {document.clientSnapshot?.billingAddress?.state} - {document.clientSnapshot?.billingAddress?.pincode}</p>
+                  {document.clientSnapshot?.gstin && <p className="text-xs"><span className="font-bold text-slate-450 uppercase">GSTIN:</span> {document.clientSnapshot.gstin}</p>}
+
+                  {document.shippingDetails?.addressLine1 && (
+                    <div className="mt-4 pt-4 border-t border-slate-100 space-y-1">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">SHIPPING DETAILS</p>
+                      <p className="text-xs">{document.shippingDetails.addressLine1}</p>
+                      <p className="text-xs">{document.shippingDetails.city}, {document.shippingDetails.state} - {document.shippingDetails.pincode}</p>
+                    </div>
+                  )}
                 </div>
 
-                {document.shippingDetails?.addressLine1 && (
-                  <div className="mt-4 space-y-1 text-slate-500">
-                    <p className="font-bold text-slate-950 uppercase text-[9px] tracking-wider mb-1">SHIPPING DETAILS</p>
-                    <p>{document.shippingDetails.addressLine1}</p>
-                    <p>{document.shippingDetails.city}, {document.shippingDetails.state} - {document.shippingDetails.pincode}</p>
-                  </div>
-                )}
+                <div className="text-right space-y-1.5 text-slate-600">
+                  <p className="text-xs"><span className="font-bold text-slate-900">Proforma No:</span> {document.documentNumber}</p>
+                  {document.poNumber && <p className="text-xs"><span className="font-bold text-slate-900">PO Ref:</span> {document.poNumber}</p>}
+                  <p className="text-xs">
+                    <span className="font-bold text-slate-900">Issue Date:</span>{' '}
+                    {new Date(document.issueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </p>
+                  <p className="text-xs">
+                    <span className="font-bold text-slate-900">Due Date:</span>{' '}
+                    {new Date(document.validTill).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </p>
+                  {showPlaceOfSupply && document.gstConfiguration?.placeOfSupply?.state && (
+                    <p className="text-xs"><span className="font-bold text-slate-900">Place of Supply:</span> {document.gstConfiguration.placeOfSupply.state}</p>
+                  )}
+                  {document.customFields?.map((field: any, index: number) => (
+                    <p key={index} className="text-xs"><span className="font-bold text-slate-900">{field.label}:</span> {field.value}</p>
+                  ))}
+                </div>
               </div>
 
-              {/* Invoice properties numbers */}
-              <div className="text-right space-y-1.5 text-slate-650">
-                <p><span className="font-bold text-slate-900">Proforma No:</span> {document.documentNumber}</p>
-                {document.poNumber && <p><span className="font-bold text-slate-900">PO Ref:</span> {document.poNumber}</p>}
-                <p>
-                  <span className="font-bold text-slate-900">Issue Date:</span>{' '}
-                  {new Date(document.issueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                </p>
-                <p>
-                  <span className="font-bold text-slate-900">Due Date:</span>{' '}
-                  {new Date(document.validTill).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                </p>
-                {showPlaceOfSupply && document.gstConfiguration?.placeOfSupply?.state && (
-                  <p><span className="font-bold text-slate-900">Place of Supply:</span> {document.gstConfiguration.placeOfSupply.state}</p>
-                )}
-                {/* Custom fields mapped */}
-                {document.customFields?.map((field: any, index: number) => (
-                  <p key={index}><span className="font-bold text-slate-900">{field.label}:</span> {field.value}</p>
-                ))}
-              </div>
-            </div>
+              {/* Line Items Table */}
+              <div className="py-6 overflow-hidden">
+                <table className="w-full border-collapse text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-500 font-semibold uppercase text-[9px] tracking-wider bg-slate-50/50">
+                      <th className="px-4 py-2">Item Description</th>
+                      {localSettings.advanced.hsnColumnView !== 'Hide' && <th className="px-3 py-2 w-24">HSN</th>}
+                      {document.gstConfiguration?.gstEnabled && <th className="px-3 py-2 w-16">GST %</th>}
+                      <th className="px-3 py-2 w-16 text-right">Qty</th>
+                      <th className="px-3 py-2 w-24 text-right">Rate</th>
+                      <th className="px-3 py-2 w-28 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700 bg-white">
+                    {document.items?.map((item: any, i: number) => {
+                      const isGroup = item.itemName && item.itemName.startsWith('[GROUP] ');
+                      if (isGroup) {
+                        return (
+                          <tr key={i} className="bg-blue-50/20 font-bold border-y border-blue-100">
+                            <td colSpan={6} className="px-4 py-2 text-slate-900 uppercase text-[10px] tracking-wider">
+                              {item.itemName.substring(8)}
+                            </td>
+                          </tr>
+                        );
+                      }
 
-            {/* Line Items Table */}
-            <div className="py-6 overflow-hidden">
-              <table className="w-full border-collapse text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-500 font-semibold uppercase text-[9px] tracking-wider bg-slate-50/50">
-                    <th className="px-4 py-2">Item Description</th>
-                    {localSettings.advanced.hsnColumnView !== 'Hide' && <th className="px-3 py-2 w-24">HSN</th>}
-                    {document.gstConfiguration?.gstEnabled && <th className="px-3 py-2 w-16">GST %</th>}
-                    <th className="px-3 py-2 w-16 text-right">Qty</th>
-                    <th className="px-3 py-2 w-24 text-right">Rate</th>
-                    <th className="px-3 py-2 w-28 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700 bg-white">
-                  {document.items?.map((item: any, i: number) => {
-                    const isGroup = item.itemName && item.itemName.startsWith('[GROUP] ');
-                    if (isGroup) {
                       return (
-                        <tr key={i} className="bg-blue-50/20 font-bold border-y border-blue-100">
-                          <td colSpan={6} className="px-4 py-2 text-slate-900 uppercase text-[10px] tracking-wider">
-                            {item.itemName.substring(8)}
+                        <tr key={i} className="hover:bg-slate-50/30">
+                          <td className="px-4 py-3">
+                            <div className="flex gap-2">
+                              {localSettings.advanced.showOriginalItemImages && item.image && (
+                                <img src={formatImageSrc(item.image)} alt="item-thumb" className="w-8 h-8 rounded object-contain flex-shrink-0 border border-slate-100 bg-slate-50" />
+                              )}
+                              <div>
+                                <p className="font-semibold text-slate-900">{item.itemName}</p>
+                                {item.description && <p className="text-[10px] text-slate-450 mt-0.5 whitespace-pre-wrap">{item.description}</p>}
+                              </div>
+                            </div>
+                          </td>
+                          {localSettings.advanced.hsnColumnView !== 'Hide' && <td className="px-3 py-3 font-mono">{item.hsnSac || '—'}</td>}
+                          {document.gstConfiguration?.gstEnabled && <td className="px-3 py-3">{item.gstRate || 0}%</td>}
+                          <td className="px-3 py-3 text-right">
+                            {item.quantity} {localSettings.advanced.unitDisplay === 'Separate column' ? (item.unit || 'PCS') : ''}
+                          </td>
+                          <td className="px-3 py-3 text-right">₹{item.rate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td className="px-3 py-3 text-right font-semibold text-slate-900">
+                            ₹{((item.quantity * item.rate) - (item.itemDiscountAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </td>
                         </tr>
                       );
-                    }
-
-                    return (
-                      <tr key={i} className="hover:bg-slate-50/30">
-                        <td className="px-4 py-3">
-                          <div className="flex gap-2">
-                            {localSettings.advanced.showOriginalItemImages && item.image && (
-                              <img src={item.image} alt="item-thumb" className="w-8 h-8 rounded object-contain flex-shrink-0 border border-slate-100 bg-slate-50" />
-                            )}
-                            <div>
-                              <p className="font-semibold text-slate-900">{item.itemName}</p>
-                              {item.description && <p className="text-[10px] text-slate-450 mt-0.5 whitespace-pre-wrap">{item.description}</p>}
-                            </div>
-                          </div>
-                        </td>
-                        {localSettings.advanced.hsnColumnView !== 'Hide' && <td className="px-3 py-3 font-mono">{item.hsnSac || '—'}</td>}
-                        {document.gstConfiguration?.gstEnabled && <td className="px-3 py-3">{item.gstRate || 0}%</td>}
-                        <td className="px-3 py-3 text-right">
-                          {item.quantity} {localSettings.advanced.unitDisplay === 'Separate column' ? (item.unit || 'PCS') : ''}
-                        </td>
-                        <td className="px-3 py-3 text-right">₹{item.rate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                        <td className="px-3 py-3 text-right font-semibold text-slate-900">
-                          ₹{((item.quantity * item.rate) - (item.itemDiscountAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Calculations totals summaries card */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-slate-200 pt-6">
-              {/* Left Column: terms, remarks, signatures */}
-              <div className="space-y-4">
-                {document.notes && (
-                  <div>
-                    <h4 className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Remarks / Notes</h4>
-                    <p className="text-slate-600 text-[10px] whitespace-pre-wrap leading-relaxed">{document.notes}</p>
-                  </div>
-                )}
-                {document.terms && (
-                  <div>
-                    <h4 className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Terms & Conditions</h4>
-                    <p className="text-slate-600 text-[10px] whitespace-pre-wrap leading-relaxed">{document.terms}</p>
-                  </div>
-                )}
-
-                {/* Bank Account snapshot details */}
-                {document.bankDetails?.accountNumber && (
-                  <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl space-y-1.5 text-[10px] text-slate-600 max-w-sm">
-                    <p className="font-bold text-[9px] text-slate-950 uppercase tracking-wider border-b border-slate-200 pb-1">Payment Settlement Details</p>
-                    <p><span className="font-semibold">Bank:</span> {document.bankDetails.bankName}</p>
-                    <p><span className="font-semibold">A/C Holder:</span> {document.bankDetails.accountHolderName}</p>
-                    <p><span className="font-semibold">A/C Number:</span> <span className="font-mono text-slate-900 font-bold">{document.bankDetails.accountNumber}</span></p>
-                    <p><span className="font-semibold">IFSC Code:</span> <span className="font-mono uppercase text-slate-900 font-bold">{document.bankDetails.ifsc}</span></p>
-                    {document.bankDetails.branchName && <p><span className="font-semibold">Branch:</span> {document.bankDetails.branchName}</p>}
-                  </div>
-                )}
+                    })}
+                  </tbody>
+                </table>
               </div>
 
-              {/* Right Column: summary totals */}
-              <div className="space-y-3.5 text-right text-slate-650 max-w-md ml-auto w-full">
-                <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span className="font-semibold text-slate-900">₹{document.subtotal?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                </div>
-                {document.documentDiscountAmount > 0 && (
-                  <div className="flex justify-between text-slate-500">
-                    <span>Discount:</span>
-                    <span>- ₹{document.documentDiscountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                )}
-
-                {/* Tax Breakdown rows */}
-                {document.gstConfiguration?.gstEnabled && (
-                  <>
-                    {document.cgstTotal > 0 && (
-                      <div className="flex justify-between">
-                        <span>CGST:</span>
-                        <span>₹{document.cgstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                      </div>
-                    )}
-                    {document.sgstTotal > 0 && (
-                      <div className="flex justify-between">
-                        <span>SGST:</span>
-                        <span>₹{document.sgstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                      </div>
-                    )}
-                    {document.igstTotal > 0 && (
-                      <div className="flex justify-between">
-                        <span>IGST:</span>
-                        <span>₹{document.igstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {document.additionalChargesTotal > 0 && (
-                  <div className="flex justify-between">
-                    <span>Shipping & Charges:</span>
-                    <span>₹{document.additionalChargesTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                )}
-
-                {document.roundOff !== 0 && (
-                  <div className="flex justify-between text-slate-500">
-                    <span>Round-off:</span>
-                    <span>₹{document.roundOff > 0 ? '+' : ''}{document.roundOff.toFixed(2)}</span>
-                  </div>
-                )}
-
-                <div className="flex justify-between border-t border-slate-200 pt-3 text-sm font-black text-slate-900">
-                  <span>Total Amount Due:</span>
-                  <span>₹{document.grandTotal?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                </div>
-
-                {/* Total in words */}
-                {document.grandTotalInWords && (
-                  <p className="text-[10px] text-slate-450 italic pt-1">
-                    Amount in Words: {document.grandTotalInWords}
-                  </p>
-                )}
-
-                {/* Signature slot render */}
-                {document.signature?.signatoryName && (
-                  <div className="pt-8 flex flex-col items-end space-y-2">
-                    {document.signature.signatureUrl && (
-                      <img src={document.signature.signatureUrl} alt="Signature Watermark" className="h-10 object-contain pr-4" />
-                    )}
-                    <div className="text-center w-48 border-t border-slate-200 pt-1">
-                      <p className="font-bold text-slate-900">{document.signature.signatoryName}</p>
-                      <p className="text-[9px] text-slate-400 uppercase tracking-wider font-bold">Authorized Signatory</p>
+              {/* Calculations totals summaries card */}
+              <div className="totals-section print-avoid-break grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-slate-200 pt-6">
+                {/* Left Column: Remarks and Bank Details */}
+                <div className="space-y-4">
+                  {document.notes && (
+                    <div>
+                      <h4 className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Remarks / Notes</h4>
+                      <p className="text-slate-655 text-[10px] whitespace-pre-wrap leading-relaxed">{document.notes}</p>
                     </div>
+                  )}
+
+                  {/* Bank Account snapshot details */}
+                  {document.bankDetails?.accountNumber && (
+                    <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl space-y-1.5 text-[10px] text-slate-600 max-w-sm">
+                      <p className="font-bold text-[9px] text-slate-950 uppercase tracking-wider border-b border-slate-200 pb-1">Payment Settlement Details</p>
+                      <p><span className="font-semibold">Bank:</span> {document.bankDetails.bankName}</p>
+                      <p><span className="font-semibold">A/C Holder:</span> {document.bankDetails.accountHolderName}</p>
+                      <p><span className="font-semibold">A/C Number:</span> <span className="font-mono text-slate-900 font-bold">{document.bankDetails.accountNumber}</span></p>
+                      <p><span className="font-semibold">IFSC Code:</span> <span className="font-mono uppercase text-slate-900 font-bold">{document.bankDetails.ifsc}</span></p>
+                      {document.bankDetails.branchName && <p><span className="font-semibold">Branch:</span> {document.bankDetails.branchName}</p>}
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Column: summary totals */}
+                <div className="space-y-3.5 text-right text-slate-655 max-w-md ml-auto w-full">
+                  <div className="flex justify-between">
+                    <span>Subtotal:</span>
+                    <span className="font-semibold text-slate-900">₹{document.subtotal?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                   </div>
-                )}
+                  {document.documentDiscountAmount > 0 && (
+                    <div className="flex justify-between text-slate-505">
+                      <span>Discount:</span>
+                      <span>- ₹{document.documentDiscountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
+
+                  {/* Tax Breakdown rows */}
+                  {document.gstConfiguration?.gstEnabled && (
+                    <>
+                      {document.cgstTotal > 0 && (
+                        <div className="flex justify-between">
+                          <span>CGST:</span>
+                          <span>₹{document.cgstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
+                      {document.sgstTotal > 0 && (
+                        <div className="flex justify-between">
+                          <span>SGST:</span>
+                          <span>₹{document.sgstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
+                      {document.igstTotal > 0 && (
+                        <div className="flex justify-between">
+                          <span>IGST:</span>
+                          <span>₹{document.igstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {document.additionalChargesTotal > 0 && (
+                    <div className="flex justify-between">
+                      <span>Shipping & Charges:</span>
+                      <span>₹{document.additionalChargesTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
+
+                  {document.roundOff !== 0 && (
+                    <div className="flex justify-between text-slate-505">
+                      <span>Round-off:</span>
+                      <span>₹{document.roundOff > 0 ? '+' : ''}{document.roundOff.toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between border-t border-slate-200 pt-3 text-sm font-black text-slate-900">
+                    <span>Total Amount Due:</span>
+                    <span>₹{document.grandTotal?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
               </div>
             </div>
-            {/* Footer Text */}
-            {document.footer && (
-              <div className="border-t border-slate-150 pt-4 mt-8 text-center text-[10px] text-slate-400 font-medium">
-                {document.footer}
+
+            {/* Bottom section (Footer content) */}
+            <div className="mt-8 pt-6 border-t border-slate-200 print-avoid-break space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-end text-left">
+                {/* Left: Terms & Conditions and Amount in Words */}
+                <div className="space-y-3">
+                  {document.grandTotalInWords && (
+                    <div className="text-[10px] text-slate-500 italic">
+                      <span className="font-bold uppercase tracking-wider text-[8px] block text-slate-400">Amount in Words</span>
+                      {document.grandTotalInWords}
+                    </div>
+                  )}
+                  {document.terms && (
+                    <div>
+                      <h4 className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Terms & Conditions</h4>
+                      <p className="text-slate-600 text-[10px] whitespace-pre-wrap leading-relaxed">{document.terms}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right: Signature */}
+                <div className="text-right">
+                  {document.signature?.signatoryName && (
+                    <div className="flex flex-col items-end space-y-2">
+                      {document.signature.signatureUrl && (
+                        <img src={formatImageSrc(document.signature.signatureUrl)} alt="Signature" className="h-10 object-contain pr-4" />
+                      )}
+                      <div className="text-center w-48 border-t border-slate-200 pt-1">
+                        <p className="font-bold text-slate-900">{document.signature.signatoryName}</p>
+                        <p className="text-[9px] text-slate-400 uppercase tracking-wider font-bold">Authorized Signatory</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
+
+              {/* Bottom line: page details */}
+              {document.footer && (
+                <div className="text-center text-[9px] text-slate-400 pt-2 border-t border-slate-100">
+                  {document.footer}
+                </div>
+              )}
+
+              {/* Print-only fixed website and page number */}
+              <div className="hidden print:flex justify-between items-center text-[8px] text-slate-400 pt-2">
+                <div>{document.businessSnapshot?.website || 'www.techbes.com'}</div>
+                <div className="page-number"></div>
+              </div>
+            </div>
           </div>
 
           {/* Payment ledger history */}
@@ -738,7 +761,6 @@ export default function ProformaInvoiceDetailsPage({ params }: ProformaInvoiceDe
               </div>
             )}
           </div>
-        </div>
 
         {/* Right side: settings accordions panel */}
         <div className="xl:col-span-1 space-y-4 print:hidden">
