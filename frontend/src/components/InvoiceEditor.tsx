@@ -78,8 +78,8 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
   const [docTitle, setDocTitle] = useState('Invoice');
   const [docSubtitle, setDocSubtitle] = useState('');
   const [showSubtitleInput, setShowSubtitleInput] = useState(false);
-  const [documentNumber, setDocumentNumber] = useState('Auto-generated');
-  const [isNumberEditable, setIsNumberEditable] = useState(false);
+  const [documentNumber, setDocumentNumber] = useState('');
+  const [isNumberEditable, setIsNumberEditable] = useState(true);
   const [poNumber, setPoNumber] = useState('');
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState(() => {
@@ -430,22 +430,10 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
         setClients(clientsRes.data.data.clients || []);
       }
 
-      // Fetch next document number if in create mode
+      // Invoice numbers are always user-editable and are not auto-sequenced.
       if (mode === 'create') {
-        try {
-          const numRes = await api.get('/documents/next-number?type=INVOICE');
-          if (numRes.data?.success) {
-            if (numRes.data.data.exists) {
-              setDocumentNumber(numRes.data.data.nextNumber);
-              setIsNumberEditable(false);
-            } else {
-              setDocumentNumber('');
-              setIsNumberEditable(true);
-            }
-          }
-        } catch (e) {
-          console.error("Error fetching next document number:", e);
-        }
+        setDocumentNumber('');
+        setIsNumberEditable(true);
       }
 
       // 3. Load from DB (Initial state)
@@ -494,6 +482,8 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
     setDocTitle(data.title || 'Invoice');
     setDocSubtitle(data.subtitle || '');
     setShowSubtitleInput(!!data.subtitle);
+    setDocumentNumber(data.documentNumber || '');
+    setIsNumberEditable(true);
     setPoNumber(data.poNumber || '');
     setIssueDate(data.issueDate || '');
     setDueDate(data.dueDate || '');
@@ -578,6 +568,7 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
     setDocSubtitle(doc.subtitle || '');
     setShowSubtitleInput(!!doc.subtitle);
     setDocumentNumber(doc.documentNumber);
+    setIsNumberEditable(true);
     setPoNumber(doc.poNumber || '');
     setIssueDate(doc.issueDate ? doc.issueDate.split('T')[0] : '');
     setDueDate(doc.validTill ? doc.validTill.split('T')[0] : '');
@@ -809,6 +800,7 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
         const dataToSave = {
           title: docTitle,
           subtitle: docSubtitle,
+          documentNumber: documentNumber.trim(),
           poNumber,
           issueDate,
           dueDate,
@@ -1182,6 +1174,7 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
         status: draftOnly ? 'DRAFT' : 'SENT',
         title: docTitle,
         subtitle: docSubtitle,
+        documentNumber: documentNumber.trim(),
         poNumber,
         issueDate: new Date(issueDate).toISOString(),
         validTill: new Date(dueDate).toISOString(),
@@ -1475,13 +1468,8 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
                     type="text"
                     value={documentNumber}
                     onChange={(e) => setDocumentNumber(e.target.value)}
-                    disabled={!isNumberEditable}
-                    placeholder={isNumberEditable ? "Enter Invoice Number (e.g. INV-1001)" : "Auto-generated"}
-                    className={`w-full form-input text-xs font-semibold ${
-                      !isNumberEditable
-                        ? 'text-slate-500 bg-slate-50 cursor-not-allowed'
-                        : 'text-slate-900 bg-white'
-                    }`}
+                    placeholder="Enter Invoice Number (e.g. INV-1001)"
+                    className="w-full form-input text-xs font-semibold text-slate-900 bg-white"
                   />
                 </div>
                 <div>

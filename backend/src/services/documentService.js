@@ -5,6 +5,26 @@ const BusinessProfile = require('../models/BusinessProfile');
 const ApiError = require('../utils/ApiError');
 const { toIndianWords } = require('../utils/numberToWords');
 const { DOCUMENT_PREFIX } = require('../utils/constants');
+const normalizeDocumentNumber = (value) => (typeof value === 'string' ? value.trim() : '');
+
+const ensureUniqueDocumentNumber = async (businessId, documentType, documentNumber, excludeId = null) => {
+  const normalizedNumber = normalizeDocumentNumber(documentNumber);
+  if (!normalizedNumber) {
+    throw ApiError.badRequest('Invoice Number is required.');
+  }
+
+  const query = { businessId, documentType, documentNumber: normalizedNumber };
+  if (excludeId) {
+    query._id = { $ne: excludeId };
+  }
+
+  const existing = await SalesDocument.findOne(query).select('_id').lean();
+  if (existing) {
+    throw ApiError.badRequest(`Invoice Number "${normalizedNumber}" already exists for this business.`);
+  }
+
+  return normalizedNumber;
+};
 
 /**
  * Generate atomic counter for document numbers (e.g. QT-00001)
@@ -348,8 +368,9 @@ const createDocument = async (userId, data) => {
     }
   }
 
-  // Generate sequence code
-  const docNum = await generateDocumentNumber(business._id, documentType, data.documentNumber);
+  const docNum = documentType === 'INVOICE'
+    ? await ensureUniqueDocumentNumber(business._id, documentType, data.documentNumber)
+    : await generateDocumentNumber(business._id, documentType, data.documentNumber);
 
   let availableCredit = 0;
   if (documentType === 'CREDIT_NOTE') {
@@ -542,6 +563,15 @@ const updateDocument = async (id, userId, data) => {
         throw ApiError.badRequest(`Credit Note total ₹${calculations.grandTotal.toLocaleString('en-IN')} exceeds remaining creditable amount of ₹${remaining.toLocaleString('en-IN')} for Invoice ${originalInvoice.documentNumber}`);
       }
     }
+  }
+
+  if (document.documentType === 'INVOICE' && data.documentNumber !== undefined) {
+    document.documentNumber = await ensureUniqueDocumentNumber(
+      business._id,
+      document.documentType,
+      data.documentNumber,
+      document._id
+    );
   }
 
   // Update fields
