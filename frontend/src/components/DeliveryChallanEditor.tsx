@@ -572,7 +572,7 @@ export default function DeliveryChallanEditor({ initialId }: DeliveryChallanEdit
         res = await api.post('/documents', payload);
       }
 
-      if (res.data?.success) {
+      if (res.data?.success && res.data.data?._id) {
         showToast(
           targetStatus === 'DRAFT'
             ? 'Delivery Challan draft saved successfully!'
@@ -593,8 +593,12 @@ export default function DeliveryChallanEditor({ initialId }: DeliveryChallanEdit
           setCustomFields([]);
           loadInitData();
         } else {
+          setLoading(false);
           router.push(`/delivery-challans/${res.data.data._id}`);
+          return;
         }
+      } else {
+        showToast(res.data?.message || 'Save completed but no document ID was returned. Please try again.', 'error');
       }
     } catch (err: any) {
       showToast(err.response?.data?.message || 'Failed to save delivery challan.', 'error');

@@ -908,16 +908,21 @@ export default function ProformaInvoiceEditor({ mode, documentId }: ProformaInvo
         response = await api.put(`/documents/${documentId}`, payload);
       }
 
-      if (response.data?.success) {
+      if (response.data?.success && response.data.data?._id) {
         const docId = response.data.data._id;
         const docNum = response.data.data.documentNumber;
         showToast(`Proforma invoice ${docNum} saved successfully!`, 'success');
+
+        setSaving(false);
 
         if (redirectSetup) {
           router.push(`/proforma-invoices/${docId}/payment-setup`);
         } else {
           router.push(`/proforma-invoices/${docId}`);
         }
+        return;
+      } else {
+        showToast(response.data?.message || 'Save completed but no document ID was returned. Please try again.', 'error');
       }
     } catch (err: any) {
       showToast(err.response?.data?.message || 'Failed to save proforma invoice.', 'error');

@@ -1159,7 +1159,7 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
         response = await api.put(`/documents/${documentId}`, payload);
       }
 
-      if (response.data?.success) {
+      if (response.data?.success && response.data.data?._id) {
         const docId = response.data.data._id;
         const docNum = response.data.data.documentNumber;
         showToast(`Invoice ${docNum} saved successfully!`, 'success');
@@ -1170,11 +1170,16 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
           localStorage.removeItem(draftKey);
         }
 
+        setSaving(false);
+
         if (redirectSetup) {
           router.push(`/invoices/${docId}/payment-setup`);
         } else {
           router.push(`/invoices/${docId}`);
         }
+        return;
+      } else {
+        showToast(response.data?.message || 'Save completed but no document ID was returned. Please try again.', 'error');
       }
     } catch (err: any) {
       showToast(err.response?.data?.message || 'Failed to save invoice.', 'error');

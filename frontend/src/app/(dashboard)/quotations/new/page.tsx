@@ -677,9 +677,13 @@ function NewQuotationForm() {
       };
 
       const response = await api.post('/documents', payload);
-      if (response.data?.success) {
+      if (response.data?.success && response.data.data?._id) {
         showToast('Quotation saved successfully!', 'success');
+        setSaving(false);
         router.push(`/quotations/${response.data.data._id}`);
+        return;
+      } else {
+        showToast(response.data?.message || 'Save completed but no document ID was returned. Please try again.', 'error');
       }
     } catch (err: any) {
       showToast(err.response?.data?.message || 'Failed to save quotation.', 'error');

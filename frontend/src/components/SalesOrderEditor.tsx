@@ -581,7 +581,7 @@ export default function SalesOrderEditor({ initialId }: SalesOrderEditorProps) {
         res = await api.post('/documents', payload);
       }
 
-      if (res.data?.success) {
+      if (res.data?.success && res.data.data?._id) {
         showToast(
           targetStatus === 'DRAFT'
             ? 'Sales Order draft saved successfully!'
@@ -603,8 +603,12 @@ export default function SalesOrderEditor({ initialId }: SalesOrderEditorProps) {
           setCustomFields([]);
           loadInitData();
         } else {
+          setLoading(false);
           router.push(`/sales-orders/${res.data.data._id}`);
+          return;
         }
+      } else {
+        showToast(res.data?.message || 'Save completed but no document ID was returned. Please try again.', 'error');
       }
     } catch (err: any) {
       showToast(err.response?.data?.message || 'Failed to save sales order.', 'error');
