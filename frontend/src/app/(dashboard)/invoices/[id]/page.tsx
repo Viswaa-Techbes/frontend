@@ -260,7 +260,18 @@ export default function InvoiceDetailsPage({ params }: InvoiceDetailsProps) {
 
   // Print helper
   const handlePrint = () => {
+    if (!document) return;
+    const originalTitle = document.title || window.document.title;
+    const docTypeStr = 'Invoice';
+    const cleanDocNum = document.documentNumber.replace(/\s+/g, '-');
+    const rawClient = document.clientSnapshot?.businessName || document.clientSnapshot?.clientName || 'Client';
+    const cleanClient = rawClient.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-_]/g, '');
+    
+    window.document.title = `${docTypeStr}_${cleanDocNum}_${cleanClient}`;
     window.print();
+    setTimeout(() => {
+      window.document.title = originalTitle;
+    }, 1000);
   };
 
   // Share helper
@@ -788,6 +799,34 @@ export default function InvoiceDetailsPage({ params }: InvoiceDetailsProps) {
                     <span className="invoice-doc-grand-total-label">Grand Total</span>
                     <span className="invoice-doc-grand-total-value">₹{document.grandTotal?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                   </div>
+                  {document.documentType === 'INVOICE' && (
+                    <div className="p-3 bg-slate-50 border-t border-slate-200 text-xs space-y-1.5 print:bg-slate-50/50 print-avoid-break">
+                      <div className="flex justify-between text-slate-600">
+                        <span>Amount Paid:</span>
+                        <span className="font-semibold text-slate-800">₹{(document.amountPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-600">
+                        <span>Remaining Balance:</span>
+                        <span className="font-bold text-amber-700">₹{(document.balanceDue !== undefined ? document.balanceDue : document.grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-slate-600 pt-1 border-t border-slate-200">
+                        <span>Payment Status:</span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          (document.balanceDue !== undefined ? document.balanceDue : document.grandTotal) === 0 
+                            ? 'bg-emerald-100 text-emerald-800' 
+                            : (document.amountPaid || 0) > 0 
+                              ? 'bg-amber-100 text-amber-800' 
+                              : 'bg-rose-100 text-rose-800'
+                        }`}>
+                          {(document.balanceDue !== undefined ? document.balanceDue : document.grandTotal) === 0 
+                            ? 'Paid' 
+                            : (document.amountPaid || 0) > 0 
+                              ? 'Partially Paid' 
+                              : 'Unpaid'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

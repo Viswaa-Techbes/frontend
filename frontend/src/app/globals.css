@@ -96,6 +96,11 @@ body {
 }
 
 /* ── Invoice Document (screen preview + print) ── */
+.invoice-print-shell {
+  padding: 15mm 20mm !important;
+  box-sizing: border-box;
+}
+
 .invoice-doc {
   --invoice-accent: #1e40af;
   --invoice-accent-light: #eff6ff;
@@ -121,7 +126,7 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px 32px;
-  padding: 28px 32px 24px;
+  padding: 0 0 24px;
   border-bottom: 2px solid var(--invoice-border);
 }
 
@@ -226,14 +231,14 @@ body {
 }
 
 .invoice-doc-section {
-  padding: 0 32px;
+  padding: 0;
   margin-top: 24px;
 }
 
 .invoice-doc-section-divider {
   height: 1px;
   background: var(--invoice-border);
-  margin: 0 32px;
+  margin: 0;
 }
 
 .invoice-doc-parties {
@@ -452,7 +457,7 @@ body {
 
 .invoice-doc-footer {
   margin-top: 28px;
-  padding: 20px 32px 24px;
+  padding: 20px 0 0;
   border-top: 2px solid var(--invoice-border);
 }
 
@@ -643,7 +648,7 @@ body {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 15mm;
+    margin: 0;
   }
 
   html, body {
@@ -709,12 +714,16 @@ body {
   }
 
   .invoice-print-shell {
-    padding: 0 !important;
+    padding: 15mm 20mm !important;
     border: 0 !important;
     box-shadow: none !important;
     font-size: 10.5pt !important;
-    max-width: 100% !important;
-    min-height: 0 !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    box-sizing: border-box !important;
+    background: #ffffff !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
   }
 
   .invoice-doc {
@@ -736,24 +745,6 @@ body {
   .invoice-doc-notes-box {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
-  }
-
-  .invoice-doc-header {
-    padding: 20px 0 18px !important;
-  }
-
-  .invoice-doc-section {
-    padding: 0 !important;
-    margin-top: 18px !important;
-  }
-
-  .invoice-doc-section-divider {
-    margin: 0 !important;
-  }
-
-  .invoice-doc-footer {
-    padding: 16px 0 0 !important;
-    margin-top: 20px !important;
   }
 
   .invoice-doc-logo,
@@ -796,15 +787,7 @@ body {
     font-size: 18pt !important;
   }
 
-  .invoice-doc-totals-grid {
-    grid-template-columns: 1fr 280px !important;
-    gap: 16px !important;
-  }
 
-  .invoice-doc-parties {
-    grid-template-columns: 1.2fr 0.8fr !important;
-    gap: 14px !important;
-  }
 
   .invoice-doc-page-footer {
     display: flex !important;

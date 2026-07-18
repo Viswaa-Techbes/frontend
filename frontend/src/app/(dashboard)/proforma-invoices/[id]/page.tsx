@@ -253,15 +253,26 @@ export default function ProformaInvoiceDetailsPage({ params }: ProformaInvoiceDe
 
   // Print helper
   const handlePrint = () => {
+    if (!document) return;
+    const originalTitle = document.title || window.document.title;
+    const docTypeStr = 'ProformaInvoice';
+    const cleanDocNum = document.documentNumber.replace(/\s+/g, '-');
+    const rawClient = document.clientSnapshot?.businessName || document.clientSnapshot?.clientName || 'Client';
+    const cleanClient = rawClient.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-_]/g, '');
+    
+    window.document.title = `${docTypeStr}_${cleanDocNum}_${cleanClient}`;
     window.print();
+    setTimeout(() => {
+      window.document.title = originalTitle;
+    }, 1000);
   };
 
-  // Download PDF simulation (fetches details from backend and triggers browser print layout formatted)
+  // Download PDF simulation
   const handleDownloadPdf = async () => {
     try {
       showToast('Preparing PDF download layout...', 'info');
       setTimeout(() => {
-        window.print();
+        handlePrint();
       }, 500);
     } catch (err: any) {
       showToast('Failed to trigger PDF generator.', 'error');

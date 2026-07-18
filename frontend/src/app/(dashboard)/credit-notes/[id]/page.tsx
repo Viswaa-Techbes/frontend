@@ -252,7 +252,18 @@ export default function CreditNoteDetailPage() {
   };
 
   const handlePrint = () => {
+    if (!document) return;
+    const originalTitle = document.title || window.document.title;
+    const docTypeStr = 'CreditNote';
+    const cleanDocNum = document.documentNumber.replace(/\s+/g, '-');
+    const rawClient = document.clientSnapshot?.businessName || document.clientSnapshot?.clientName || 'Client';
+    const cleanClient = rawClient.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-_]/g, '');
+    
+    window.document.title = `${docTypeStr}_${cleanDocNum}_${cleanClient}`;
     window.print();
+    setTimeout(() => {
+      window.document.title = originalTitle;
+    }, 1000);
   };
 
   const handleShare = (channel: 'email' | 'whatsapp') => {

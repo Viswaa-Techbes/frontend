@@ -58,7 +58,18 @@ export default function PaymentReceiptDetailPage() {
   }, [id]);
 
   const handlePrint = () => {
+    if (!receipt) return;
+    const originalTitle = document.title || window.document.title;
+    const docTypeStr = 'PaymentReceipt';
+    const cleanDocNum = receipt.receiptNumber.replace(/\s+/g, '-');
+    const rawClient = receipt.clientSnapshot?.businessName || receipt.clientSnapshot?.clientName || 'Client';
+    const cleanClient = rawClient.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-_]/g, '');
+    
+    window.document.title = `${docTypeStr}_${cleanDocNum}_${cleanClient}`;
     window.print();
+    setTimeout(() => {
+      window.document.title = originalTitle;
+    }, 1000);
   };
 
   const handleCancelReceipt = async () => {
