@@ -48,8 +48,9 @@ const businessProfileSchema = new mongoose.Schema(
     defaultNotes: { type: String, default: '' },
     defaultFooter: { type: String, default: '' },
 
-    // Signature
+    // Signature & QR
     signatureUrl: { type: String },
+    qrCodeUrl: { type: String },
   },
   { timestamps: true }
 );

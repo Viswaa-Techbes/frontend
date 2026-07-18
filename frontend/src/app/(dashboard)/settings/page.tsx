@@ -35,6 +35,7 @@ export default function SettingsPage() {
   const [pan, setPan] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [signatureUrl, setSignatureUrl] = useState('');
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
 
   // Address
   const [address, setAddress] = useState<AddressState>({
@@ -76,6 +77,7 @@ export default function SettingsPage() {
           setPan(biz.pan || '');
           setLogoUrl(biz.logoUrl || '');
           setSignatureUrl(biz.signatureUrl || '');
+          setQrCodeUrl(biz.qrCodeUrl || '');
 
           if (biz.address) {
             setAddress({
@@ -118,13 +120,17 @@ export default function SettingsPage() {
     }));
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'signature') => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'signature' | 'qrCode') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     // Check size limits
     if (type === 'signature' && file.size > 1 * 1024 * 1024) {
       showToast('Signature file size must be less than 1MB', 'error');
+      return;
+    }
+    if (type === 'qrCode' && file.size > 1 * 1024 * 1024) {
+      showToast('QR Code file size must be less than 1MB', 'error');
       return;
     }
     if (type === 'logo' && file.size > 2 * 1024 * 1024) {
@@ -137,10 +143,12 @@ export default function SettingsPage() {
       const base64String = reader.result as string;
       if (type === 'logo') {
         setLogoUrl(base64String);
-      } else {
+      } else if (type === 'signature') {
         setSignatureUrl(base64String);
+      } else if (type === 'qrCode') {
+        setQrCodeUrl(base64String);
       }
-      showToast(`${type === 'logo' ? 'Logo' : 'Signature'} loaded successfully!`, 'success');
+      showToast(`${type === 'logo' ? 'Logo' : type === 'signature' ? 'Signature' : 'QR Code'} loaded successfully!`, 'success');
     };
     reader.readAsDataURL(file);
   };
@@ -575,6 +583,43 @@ export default function SettingsPage() {
                     />
                   </label>
                   <p className="text-[10px] text-slate-400">Transparent PNG recommended. Max 2MB.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* QR Code Upload Area */}
+            <div className="space-y-4">
+              <span className="block text-xs font-semibold text-slate-655 text-slate-650">QR Code</span>
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 border border-slate-200 rounded-xl bg-slate-50 flex items-center justify-center overflow-hidden shadow-inner">
+                  {qrCodeUrl ? (
+                    <img src={qrCodeUrl} alt="QR Code Preview" className="max-w-full max-h-full object-contain" />
+                  ) : (
+                    <svg className="w-6 h-6 text-slate-350" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5h4.5v-4.5h-4.5zm12 0v4.5h4.5v-4.5h-4.5zm-12 12v4.5h4.5v-4.5h-4.5zm10.5-1.5h1.5v1.5h-1.5v-1.5zm1.5 1.5h1.5v1.5h-1.5v-1.5zm-1.5 1.5h1.5v1.5h-1.5v-1.5zm1.5 1.5h1.5v1.5h-1.5v-1.5z" />
+                    </svg>
+                  )}
+                </div>
+                <div className="flex-1 space-y-2">
+                  <label className="inline-block px-4 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 cursor-pointer transition-colors shadow-sm">
+                    Select File
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileChange(e, 'qrCode')}
+                      className="hidden"
+                    />
+                  </label>
+                  {qrCodeUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setQrCodeUrl('')}
+                      className="ml-2 inline-block px-4 py-2 border border-rose-200 rounded-xl text-xs font-semibold text-rose-600 bg-white hover:bg-rose-50 cursor-pointer transition-colors shadow-sm"
+                    >
+                      Delete
+                    </button>
+                  )}
+                  <p className="text-[10px] text-slate-400">PNG, JPG formats supported. Max 2MB.</p>
                 </div>
               </div>
             </div>

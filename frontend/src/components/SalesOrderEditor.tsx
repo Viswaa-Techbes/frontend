@@ -509,8 +509,8 @@ export default function SalesOrderEditor({ initialId }: SalesOrderEditorProps) {
       title,
       subtitle,
       poNumber,
-      issueDate,
-      validTill,
+      issueDate: issueDate ? new Date(issueDate).toISOString() : new Date().toISOString(),
+      validTill: validTill ? new Date(validTill).toISOString() : undefined,
       clientId: selectedClient._id,
       shippingDetails: showShipping ? {
         shippingName: shippingDetails.shippingName,

@@ -638,13 +638,25 @@ export default function QuotationDetailPage() {
                   )}
 
                   {document.bankDetails?.accountNumber && (
-                    <div className="invoice-doc-bank-box">
-                      <p className="invoice-doc-section-label" style={{ marginBottom: 8, borderBottom: 'none', paddingBottom: 0 }}>Payment Details</p>
-                      <p><strong>Bank:</strong> {document.bankDetails.bankName}</p>
-                      <p><strong>A/C Holder:</strong> {document.bankDetails.accountHolderName}</p>
-                      <p><strong>A/C Number:</strong> <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{document.bankDetails.accountNumber}</span></p>
-                      <p><strong>IFSC:</strong> <span style={{ fontFamily: 'monospace', fontWeight: 700, textTransform: 'uppercase' }}>{document.bankDetails.ifsc}</span></p>
-                      {document.bankDetails.branchName && <p><strong>Branch:</strong> {document.bankDetails.branchName}</p>}
+                    <div className="invoice-doc-bank-box" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <p className="invoice-doc-section-label" style={{ marginBottom: 8, borderBottom: 'none', paddingBottom: 0 }}>Payment Details</p>
+                        <p><strong>Bank:</strong> {document.bankDetails.bankName}</p>
+                        <p><strong>A/C Holder:</strong> {document.bankDetails.accountHolderName}</p>
+                        <p><strong>A/C Number:</strong> <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{document.bankDetails.accountNumber}</span></p>
+                        <p><strong>IFSC:</strong> <span style={{ fontFamily: 'monospace', fontWeight: 700, textTransform: 'uppercase' }}>{document.bankDetails.ifsc}</span></p>
+                        {document.bankDetails.branchName && <p><strong>Branch:</strong> {document.bankDetails.branchName}</p>}
+                      </div>
+                      {(document.businessSnapshot?.qrCodeUrl || businessProfile?.qrCodeUrl) && (
+                        <div style={{ marginLeft: '16px', textAlign: 'center' }}>
+                          <img 
+                            src={document.businessSnapshot?.qrCodeUrl || businessProfile?.qrCodeUrl} 
+                            alt="UPI QR Code" 
+                            style={{ width: '80px', height: '80px', objectFit: 'contain' }}
+                          />
+                          <p style={{ fontSize: '9px', color: '#64748b', marginTop: '4px' }}>Scan to Pay</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

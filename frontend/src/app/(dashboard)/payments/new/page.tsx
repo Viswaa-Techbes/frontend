@@ -775,10 +775,9 @@ export default function NewPaymentReceiptPage() {
                       <thead>
                         <tr className="bg-slate-50 text-slate-500 border-b border-slate-200">
                           <th className="px-4 py-2">Invoice Number</th>
-                          <th className="px-4 py-2">Due Date</th>
                           <th className="px-4 py-2 text-right">Invoice Total</th>
-                          <th className="px-4 py-2 text-right">Outstanding Amount</th>
-                          <th className="px-4 py-2 text-right w-40">Settlement Amount</th>
+                          <th className="px-4 py-2 text-right w-40">Amount Received</th>
+                          <th className="px-4 py-2 text-right">Remaining Balance</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -788,11 +787,7 @@ export default function NewPaymentReceiptPage() {
                               <p className="font-bold text-slate-900 font-mono">{inv.documentNumber}</p>
                               <span className="text-[10px] text-slate-450">Issue: {new Date(inv.issueDate).toLocaleDateString('en-IN')}</span>
                             </td>
-                            <td className="px-4 py-3 text-slate-600">
-                              {inv.validTill ? new Date(inv.validTill).toLocaleDateString('en-IN') : '—'}
-                            </td>
                             <td className="px-4 py-3 text-right font-semibold">₹{inv.grandTotal.toLocaleString('en-IN')}</td>
-                            <td className="px-4 py-3 text-right text-amber-600 font-bold">₹{inv.balanceDue.toLocaleString('en-IN')}</td>
                             <td className="px-4 py-3 text-right">
                               <div className="flex justify-end items-center gap-1.5">
                                 <span className="text-slate-400">₹</span>
@@ -804,6 +799,9 @@ export default function NewPaymentReceiptPage() {
                                   className="w-28 text-right form-input text-xs"
                                 />
                               </div>
+                            </td>
+                            <td className="px-4 py-3 text-right text-amber-600 font-bold">
+                              ₹{Math.max(0, inv.balanceDue - (inv.settlementAmount || 0)).toLocaleString('en-IN')}
                             </td>
                           </tr>
                         ))}

@@ -61,6 +61,17 @@ const businessRules = [
       }
       return true;
     }),
+  body('qrCodeUrl')
+    .optional({ values: 'falsy' })
+    .custom((value) => {
+      if (value && value.startsWith('data:')) {
+        const size = getBase64Size(value);
+        if (size > 1 * 1024 * 1024) {
+          throw new Error('QR Code image must be at most 1 MB');
+        }
+      }
+      return true;
+    }),
   body('accountName')
     .optional({ values: 'falsy' })
     .trim(),
