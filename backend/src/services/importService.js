@@ -176,15 +176,18 @@ const validateImport = async (businessId, importType, rows, columnMapping, clien
         continue;
       }
 
-      // Check duplicates
-      const dupQuery = {
-        businessId,
-        itemName: { $regex: new RegExp(`^${rawData.itemName.trim()}$`, 'i') }
-      };
+      const orConditions = [
+        { itemName: { $regex: new RegExp(`^${rawData.itemName.trim()}$`, 'i') } }
+      ];
 
       if (rawData.sku) {
-        dupQuery.sku = { $regex: new RegExp(`^${rawData.sku.trim()}$`, 'i') };
+        orConditions.push({ sku: { $regex: new RegExp(`^${rawData.sku.trim()}$`, 'i') } });
       }
+
+      const dupQuery = {
+        businessId,
+        $or: orConditions
+      };
 
       const existingItem = await Item.findOne(dupQuery);
 

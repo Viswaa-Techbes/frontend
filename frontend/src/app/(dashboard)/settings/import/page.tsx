@@ -878,10 +878,20 @@ export default function DataImportPage() {
                   Start New Import
                 </button>
                 <Link
-                  href="/dashboard"
+                  href={
+                    importType === 'ITEM' ? '/inventory' :
+                    importType === 'CLIENT' ? '/clients' :
+                    importType === 'PROFORMA_INVOICE' ? '/proforma-invoices' :
+                    importType === 'DELIVERY_CHALLAN' ? '/delivery-challans' :
+                    importType === 'CREDIT_NOTE' ? '/credit-notes' :
+                    importType === 'PAYMENT_RECEIPT' ? '/payment-receipts' :
+                    importType === 'QUOTATION' ? '/quotations' :
+                    importType === 'SALES_ORDER' ? '/sales-orders' :
+                    '/invoices'
+                  }
                   className="px-6 py-2.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm"
                 >
-                  Back to Dashboard
+                  View Imported Records
                 </Link>
               </div>
             </div>
