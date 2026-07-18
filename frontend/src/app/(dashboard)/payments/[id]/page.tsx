@@ -18,6 +18,36 @@ export default function PaymentReceiptDetailPage() {
   const [receipt, setReceipt] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  const formatImageSrc = (src: string) => {
+    if (!src) return '';
+    if (src.startsWith('data:image/') || src.startsWith('http://') || src.startsWith('https://')) {
+      return src;
+    }
+    return `data:image/png;base64,${src}`;
+  };
+
+  const [localSettings, setLocalSettings] = useState<any>({
+    design: {
+      templateId: 'Professional',
+      primaryColor: '#2563eb',
+      fontFamily: 'Inter',
+      fontScale: 'Medium',
+      headerAlignment: 'Left',
+      logoPosition: 'Left',
+      tableStyle: 'Standard',
+      borderStyle: 'Horizontal',
+    },
+    advanced: {
+      hsnColumnView: 'HSN/SAC',
+      unitDisplayMode: 'Separate column',
+      hidePlaceOfSupply: false,
+      showSku: false,
+      showSummarizedQuantity: false,
+      showTotalInWords: true,
+      showOriginalItemImages: false,
+    },
+  });
+
   // Settings sidebars accordions
   const [expandedSection, setExpandedSection] = useState<string | null>('advanced');
 

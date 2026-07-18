@@ -247,6 +247,8 @@ export default function DeliveryChallanDetailPage() {
     );
   };
 
+  const showPlaceOfSupply = !localSettings.advanced.hidePlaceOfSupply;
+
   return (
     <div className="space-y-6 text-slate-805 pb-16">
       {/* Breadcrumbs menu */}
