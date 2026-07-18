@@ -10,7 +10,7 @@ const documentService = require('./documentService');
 
 // Column mapping aliases
 const ALIASES = {
-  clientName: ['client name', 'customer name', 'customer', 'client', 'party name', 'name', 'party'],
+  clientName: ['billed to', 'client name', 'customer name', 'customer', 'client', 'party name', 'name', 'party'],
   companyName: ['company name', 'company', 'organization', 'org', 'business name', 'business'],
   email: ['email', 'email address', 'mail', 'mail id', 'email id'],
   phone: ['phone', 'mobile', 'mobile number', 'phone number', 'contact', 'contact number'],
@@ -22,7 +22,7 @@ const ALIASES = {
   postalCode: ['postalcode', 'pin', 'pincode', 'postal code', 'zip', 'zipcode', 'pin code'],
   pincode: ['postalcode', 'pin', 'pincode', 'postal code', 'zip', 'zipcode', 'pin code'],
   country: ['country'],
-  documentNumber: ['invoice number', 'invoice no', 'bill number', 'bill no', 'document number', 'document no', 'quotation number', 'quotation no', 'estimate number', 'estimate no', 'challan number', 'challan no', 'challan', 'order number', 'order no', 'receipt number', 'receipt no', 'receipt', 'credit note number', 'credit note no', 'note number', 'note no', 'no', 'number'],
+  documentNumber: ['invoice', 'invoice number', 'invoice no', 'bill number', 'bill no', 'document number', 'document no', 'quotation number', 'quotation no', 'estimate number', 'estimate no', 'challan number', 'challan no', 'challan', 'order number', 'order no', 'receipt number', 'receipt no', 'receipt', 'credit note number', 'credit note no', 'note number', 'note no', 'no', 'number'],
   issueDate: ['invoice date', 'date', 'issue date', 'billing date', 'date of issue', 'document date', 'challan date', 'order date', 'receipt date'],
   validTill: ['valid till', 'due date', 'expiry date', 'validity', 'valid until'],
   poNumber: ['po number', 'po no', 'po ref', 'purchase order', 'reference'],
@@ -34,16 +34,36 @@ const ALIASES = {
   rate: ['rate', 'price', 'unit price', 'rate (rs)', 'price (rs)'],
   discountType: ['discount type', 'disc type'],
   discountValue: ['discount', 'discount value', 'disc', 'item discount'],
-  grandTotal: ['total', 'grand total', 'amount', 'invoice value', 'bill value', 'receipt amount', 'payment amount', 'amount paid', 'paid amount', 'paid'],
+  grandTotal: ['total', 'grand total', 'amount', 'invoice amount in inr', 'invoice amount', 'invoice value', 'bill value', 'receipt amount', 'payment amount', 'amount paid', 'paid amount', 'paid'],
   paymentMethod: ['payment method', 'payment mode', 'mode', 'method'],
   referenceNumber: ['reference number', 'transaction id', 'reference no', 'ref no', 'ref number', 'txn id', 'transaction reference', 'ref'],
   reason: ['reason', 'return reason', 'credit reason'],
   sku: ['sku', 'part number', 'item code', 'product code', 'part no', 'item no'],
   category: ['category', 'group', 'type', 'item category', 'product category'],
+  pan: ['pan', 'pan number', 'pan no', 'permanent account number'],
 };
 
 // Normalize string for alias matching
-const normalize = (str) => String(str || '').trim().toLowerCase().replace(/[^a-z0-9]/g, ' ');
+const normalize = (str) => String(str || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const sanitizeCellValue = (val) => {
+  if (val === undefined || val === null) return '';
+  const str = String(val).trim();
+  const lower = str.toLowerCase();
+  if (lower === '-' || lower === 'n/a' || lower === 'na' || lower === 'none' || lower === 'nil' || lower === 'null') {
+    return '';
+  }
+  return str;
+};
+
+const getNormalizedClientType = (val) => {
+  if (!val) return 'BUSINESS';
+  const clean = String(val).trim().toLowerCase();
+  if (['individual', 'person', 'personal', 'retail'].includes(clean)) {
+    return 'INDIVIDUAL';
+  }
+  return 'BUSINESS';
+};
 
 /**
  * Parses the Excel/CSV file from buffer
@@ -105,7 +125,7 @@ const validateImport = async (businessId, importType, rows, columnMapping, clien
     const mapped = {};
     for (const [tbField, excelHeader] of Object.entries(columnMapping)) {
       if (excelHeader && row[excelHeader] !== undefined) {
-        mapped[tbField] = row[excelHeader];
+        mapped[tbField] = sanitizeCellValue(row[excelHeader]);
       }
     }
     return mapped;
@@ -332,9 +352,14 @@ const validateImport = async (businessId, importType, rows, columnMapping, clien
           hasConflictingHeaders = true;
         }
 
-        const qty = parseFloat(row.quantity) ?? 1;
-        const rate = parseFloat(row.rate) ?? 0;
-        const gstRate = parseFloat(row.gstRate) ?? 0;
+        const rawQty = row.quantity;
+        const qty = (rawQty === undefined || rawQty === '' || isNaN(parseFloat(rawQty))) ? 1 : parseFloat(rawQty);
+
+        const rawRate = row.rate;
+        const grandTotalVal = parseFloat(row.grandTotal) || 0;
+        const rate = (rawRate === undefined || rawRate === '' || isNaN(parseFloat(rawRate))) ? grandTotalVal : parseFloat(rawRate);
+
+        const gstRate = parseFloat(row.gstRate) || 0;
 
         items.push({
           itemName: row.itemName || 'Item Details',
@@ -381,10 +406,13 @@ const validateImport = async (businessId, importType, rows, columnMapping, clien
       let hasInvalidQty = false;
       let hasInvalidRate = false;
       for (const row of group.rows) {
-        const qty = parseFloat(row.quantity);
-        const rate = parseFloat(row.rate);
-        if (isNaN(qty) || qty < 0) hasInvalidQty = true;
-        if (isNaN(rate) || rate < 0) hasInvalidRate = true;
+        const rawQty = row.quantity;
+        const qty = (rawQty === undefined || rawQty === '' || isNaN(parseFloat(rawQty))) ? 1 : parseFloat(rawQty);
+        const rawRate = row.rate;
+        const grandTotalVal = parseFloat(row.grandTotal) || 0;
+        const rate = (rawRate === undefined || rawRate === '' || isNaN(parseFloat(rawRate))) ? grandTotalVal : parseFloat(rawRate);
+        if (qty < 0) hasInvalidQty = true;
+        if (rate < 0) hasInvalidRate = true;
       }
 
       if (hasInvalidQty) {
@@ -569,12 +597,13 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
       const d = rec.data;
       await Client.create({
         businessId,
-        clientType: 'BUSINESS',
+        clientType: getNormalizedClientType(d.clientType),
         clientName: d.clientName,
         companyName: d.companyName || '',
         email: d.email || '',
         phone: d.phone || '',
         gstin: d.gstin || '',
+        pan: d.pan || '',
         billingAddress: {
           addressLine1: d.address || d.addressLine1 || '',
           city: d.city || '',
@@ -599,12 +628,13 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
       if (!client && autoCreateClients && d.clientName) {
         client = await Client.create({
           businessId,
-          clientType: 'BUSINESS',
+          clientType: getNormalizedClientType(d.clientType),
           clientName: d.clientName,
           companyName: d.companyName || '',
           email: d.email || '',
           phone: d.phone || '',
           gstin: d.gstin || '',
+          pan: d.pan || '',
           billingAddress: {
             addressLine1: d.address || d.addressLine1 || '',
             city: d.city || '',

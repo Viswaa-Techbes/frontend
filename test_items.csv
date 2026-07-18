@@ -1,6 +1,0 @@
-itemName,itemType,description,hsnSac,rate,unit,gstRate,cessAmount,sku,isActive
-Consulting Service,Service,Expert technical consulting for systems design,9983,5000,HRS,18,0,CS-001,true
-Web Development,Service,Full-stack website development,9983,12000,LS,18,0,WD-001,true
-Server Hardware,Product,Rack-mountable server 64GB RAM,8471,85000,NOS,18,0,SRV-001,true
-Network Switch,Product,24-port Gigabit Managed Switch,8517,12500,NOS,18,0,NSW-024,true
-SEO Audit,Service,Comprehensive website SEO analysis and report,9983,8000,LS,18,0,SEO-001,true

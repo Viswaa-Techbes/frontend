@@ -27,6 +27,7 @@ const FIELDS_BY_TYPE: Record<string, { key: string; label: string; required?: bo
     { key: 'email', label: 'Email Address' },
     { key: 'phone', label: 'Phone Number' },
     { key: 'gstin', label: 'GSTIN' },
+    { key: 'pan', label: 'PAN Number' },
     { key: 'address', label: 'Billing Address' },
     { key: 'city', label: 'City' },
     { key: 'state', label: 'State' },
@@ -57,12 +58,12 @@ const FIELDS_BY_TYPE: Record<string, { key: string; label: string; required?: bo
     { key: 'issueDate', label: 'Credit Note Date', required: true },
     { key: 'linkedInvoiceNumber', label: 'Linked Invoice Number' },
     { key: 'reason', label: 'Reason (Product Return, etc.)' },
-    { key: 'itemName', label: 'Item Name / Description', required: true },
+    { key: 'itemName', label: 'Item Name / Description' },
     { key: 'description', label: 'Item Long Details' },
     { key: 'hsnSac', label: 'HSN / SAC Code' },
     { key: 'gstRate', label: 'GST Rate (%)' },
-    { key: 'quantity', label: 'Quantity', required: true },
-    { key: 'rate', label: 'Unit Rate / Price', required: true },
+    { key: 'quantity', label: 'Quantity' },
+    { key: 'rate', label: 'Unit Rate / Price' },
     { key: 'grandTotal', label: 'Credit Amount' }
   ],
   DOCUMENT: [
@@ -71,12 +72,12 @@ const FIELDS_BY_TYPE: Record<string, { key: string; label: string; required?: bo
     { key: 'issueDate', label: 'Issue Date', required: true },
     { key: 'validTill', label: 'Due Date / Valid Till' },
     { key: 'poNumber', label: 'PO Reference Number' },
-    { key: 'itemName', label: 'Item Name / Description', required: true },
+    { key: 'itemName', label: 'Item Name / Description' },
     { key: 'description', label: 'Item Long Details' },
     { key: 'hsnSac', label: 'HSN / SAC Code' },
     { key: 'gstRate', label: 'GST Rate (%)' },
-    { key: 'quantity', label: 'Quantity', required: true },
-    { key: 'rate', label: 'Unit Rate / Price', required: true },
+    { key: 'quantity', label: 'Quantity' },
+    { key: 'rate', label: 'Unit Rate / Price' },
     { key: 'grandTotal', label: 'Document Grand Total' }
   ]
 };
