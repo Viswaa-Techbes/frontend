@@ -9,6 +9,7 @@ const router = Router();
 router.use(protect);
 
 router.get('/', clientController.listClients);
+router.post('/bulk-delete', clientController.bulkDeleteClients);
 router.post('/', validate(createClientRules), clientController.createClient);
 router.get('/:id', clientController.getClient);
 router.get('/:id/summary', clientController.getClientSummary);

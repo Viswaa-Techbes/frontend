@@ -7,6 +7,90 @@ const BusinessProfile = require('../models/BusinessProfile');
 const ImportHistory = require('../models/ImportHistory');
 const Item = require('../models/Item');
 const documentService = require('./documentService');
+const { INDIAN_STATES } = require('../utils/constants');
+
+// Escape regex characters
+const escapeRegExp = (string) => {
+  return String(string || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
+// Flexible date parsing supporting custom formats and Excel numbers
+const parseFlexibleDate = (dateVal) => {
+  if (!dateVal) return null;
+  if (dateVal instanceof Date) return dateVal;
+  
+  if (typeof dateVal === 'number' || (!isNaN(dateVal) && !String(dateVal).includes('-') && !String(dateVal).includes('/'))) {
+    const num = parseFloat(dateVal);
+    // Excel base date is Dec 30, 1899
+    const date = new Date(Math.round((num - 25569) * 86400 * 1000));
+    if (!isNaN(date.getTime())) return date;
+  }
+  
+  const dateStr = String(dateVal).trim();
+  let parsed = new Date(dateStr);
+  if (!isNaN(parsed.getTime())) return parsed;
+  
+  // DD/MM/YYYY or DD-MM-YYYY
+  const dmyMatch = dateStr.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})$/);
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const month = parseInt(dmyMatch[2], 10) - 1;
+    const year = parseInt(dmyMatch[3], 10);
+    const date = new Date(year, month, day);
+    if (!isNaN(date.getTime())) return date;
+  }
+
+  // YYYY/MM/DD or YYYY-MM-DD
+  const ymdMatch = dateStr.match(/^(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})$/);
+  if (ymdMatch) {
+    const year = parseInt(ymdMatch[1], 10);
+    const month = parseInt(ymdMatch[2], 10) - 1;
+    const day = parseInt(ymdMatch[3], 10);
+    const date = new Date(year, month, day);
+    if (!isNaN(date.getTime())) return date;
+  }
+
+  return null;
+};
+
+// Robust GST rate parsing
+const parseGstRate = (gstVal) => {
+  if (gstVal === undefined || gstVal === null) return 0;
+  const str = String(gstVal);
+  const match = str.match(/\d+(\.\d+)?/);
+  if (match) {
+    return parseFloat(match[0]);
+  }
+  return 0;
+};
+
+// Helper to resolve state name and state code
+const resolveStateAndCode = (stateInput, gstinInput) => {
+  let state = 'Delhi';
+  let stateCode = 'DL';
+
+  if (gstinInput && gstinInput.trim().length >= 2) {
+    const code = gstinInput.trim().substring(0, 2);
+    const matched = INDIAN_STATES.find(s => s.code === code);
+    if (matched) {
+      return { state: matched.name, stateCode: matched.stateCode };
+    }
+  }
+
+  if (stateInput) {
+    const input = stateInput.trim().toLowerCase();
+    const matchedByCode = INDIAN_STATES.find(s => s.stateCode.toLowerCase() === input);
+    if (matchedByCode) {
+      return { state: matchedByCode.name, stateCode: matchedByCode.stateCode };
+    }
+    const matchedByName = INDIAN_STATES.find(s => s.name.toLowerCase() === input || s.name.toLowerCase().includes(input));
+    if (matchedByName) {
+      return { state: matchedByName.name, stateCode: matchedByName.stateCode };
+    }
+  }
+
+  return { state, stateCode };
+};
 
 // Column mapping aliases
 const ALIASES = {
@@ -31,7 +115,7 @@ const ALIASES = {
   hsnSac: ['hsn', 'sac', 'hsn/sac', 'hsn code', 'sac code'],
   gstRate: ['gst %', 'gst rate', 'tax %', 'tax rate', 'gst percentage'],
   quantity: ['quantity', 'qty', 'quantity/unit', 'units', 'volume'],
-  rate: ['rate', 'price', 'unit price', 'rate (rs)', 'price (rs)'],
+  rate: ['rate', 'price', 'unit price', 'rate (rs)', 'price (rs)', 'taxable value', 'taxable amount', 'sub total', 'subtotal'],
   discountType: ['discount type', 'disc type'],
   discountValue: ['discount', 'discount value', 'disc', 'item discount'],
   grandTotal: ['total', 'grand total', 'amount', 'invoice amount in inr', 'invoice amount', 'invoice value', 'bill value', 'receipt amount', 'payment amount', 'amount paid', 'paid amount', 'paid'],
@@ -173,12 +257,13 @@ const validateImport = async (businessId, importType, rows, columnMapping, clien
 
     // 4. Client/company name normalized match
     if (clientName) {
+      const escapedName = escapeRegExp(clientName.trim());
       const clients = await Client.find({
         businessId,
         isDeleted: false,
         $or: [
-          { clientName: { $regex: new RegExp(`^${clientName.trim()}$`, 'i') } },
-          { businessName: { $regex: new RegExp(`^${clientName.trim()}$`, 'i') } }
+          { clientName: { $regex: new RegExp(`^${escapedName}$`, 'i') } },
+          { businessName: { $regex: new RegExp(`^${escapedName}$`, 'i') } }
         ]
       });
       if (clients.length === 1) return { client: clients[0], conflict: false, matchedClients: clients };
@@ -198,12 +283,14 @@ const validateImport = async (businessId, importType, rows, columnMapping, clien
         continue;
       }
 
+      const escapedItemName = escapeRegExp(rawData.itemName.trim());
       const orConditions = [
-        { itemName: { $regex: new RegExp(`^${rawData.itemName.trim()}$`, 'i') } }
+        { itemName: { $regex: new RegExp(`^${escapedItemName}$`, 'i') } }
       ];
 
       if (rawData.sku) {
-        orConditions.push({ sku: { $regex: new RegExp(`^${rawData.sku.trim()}$`, 'i') } });
+        const escapedSku = escapeRegExp(rawData.sku.trim());
+        orConditions.push({ sku: { $regex: new RegExp(`^${escapedSku}$`, 'i') } });
       }
 
       const dupQuery = {
@@ -239,7 +326,8 @@ const validateImport = async (businessId, importType, rows, columnMapping, clien
       if (rawData.gstin) orConditions.push({ gstin: rawData.gstin.trim().toUpperCase() });
       if (rawData.email) orConditions.push({ email: rawData.email.trim().toLowerCase() });
       if (rawData.phone) orConditions.push({ phone: rawData.phone.trim() });
-      orConditions.push({ clientName: { $regex: new RegExp(`^${rawData.clientName.trim()}$`, 'i') } });
+      const escapedClientName = escapeRegExp(rawData.clientName.trim());
+      orConditions.push({ clientName: { $regex: new RegExp(`^${escapedClientName}$`, 'i') } });
       
       dupQuery.$or = orConditions;
       const existingClient = await Client.findOne(dupQuery);
@@ -344,11 +432,19 @@ const validateImport = async (businessId, importType, rows, columnMapping, clien
 
       // Group fields check
       let hasConflictingHeaders = false;
-      const clientName = firstRow.clientName;
-      const issueDate = firstRow.issueDate;
+      const clientName = String(firstRow.clientName || '').trim();
+      const issueDateObj = parseFlexibleDate(firstRow.issueDate);
+      const issueDateTime = issueDateObj ? issueDateObj.getTime() : null;
 
       for (const row of group.rows) {
-        if (row.clientName !== clientName || String(row.issueDate) !== String(issueDate)) {
+        const currentClientName = String(row.clientName || '').trim();
+        const currentIssueDateObj = parseFlexibleDate(row.issueDate);
+        const currentIssueDateTime = currentIssueDateObj ? currentIssueDateObj.getTime() : null;
+
+        if (
+          currentClientName.toLowerCase() !== clientName.toLowerCase() || 
+          currentIssueDateTime !== issueDateTime
+        ) {
           hasConflictingHeaders = true;
         }
 
@@ -359,7 +455,7 @@ const validateImport = async (businessId, importType, rows, columnMapping, clien
         const grandTotalVal = parseFloat(row.grandTotal) || 0;
         const rate = (rawRate === undefined || rawRate === '' || isNaN(parseFloat(rawRate))) ? grandTotalVal : parseFloat(rawRate);
 
-        const gstRate = parseFloat(row.gstRate) || 0;
+        const gstRate = parseGstRate(row.gstRate);
 
         items.push({
           itemName: row.itemName || 'Item Details',
@@ -394,11 +490,11 @@ const validateImport = async (businessId, importType, rows, columnMapping, clien
         continue;
       }
 
-      if (!issueDate || isNaN(Date.parse(issueDate))) {
+      if (!issueDateObj) {
         errors.push({
           ...statusDetails,
           status: 'INVALID_DATE',
-          message: `Issue date '${issueDate}' is invalid.`,
+          message: `Issue date '${firstRow.issueDate}' is invalid.`,
         });
         continue;
       }
@@ -562,13 +658,7 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
       const d = rec.data;
       
       // Parse GST
-      let gstRate = 0;
-      if (d.gstRate !== undefined) {
-        const parsedGst = parseFloat(String(d.gstRate).replace(/%/g, ''));
-        if (!isNaN(parsedGst)) {
-          gstRate = parsedGst;
-        }
-      }
+      const gstRate = parseGstRate(d.gstRate);
 
       // Parse Rate (sellingPrice)
       let sellingPrice = 0;
@@ -594,7 +684,7 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
     }
   } else if (importType === 'CLIENT') {
     for (const rec of importableList) {
-      const d = rec.data;
+      const { state, stateCode } = resolveStateAndCode(d.state, d.gstin);
       await Client.create({
         businessId,
         clientType: getNormalizedClientType(d.clientType),
@@ -607,7 +697,8 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
         billingAddress: {
           addressLine1: d.address || d.addressLine1 || '',
           city: d.city || '',
-          state: d.state || '',
+          state,
+          stateCode,
           pincode: d.postalCode || d.pincode || '',
           country: d.country || 'India',
         },
@@ -626,6 +717,7 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
       }
       
       if (!client && autoCreateClients && d.clientName) {
+        const { state, stateCode } = resolveStateAndCode(d.state, d.gstin);
         client = await Client.create({
           businessId,
           clientType: getNormalizedClientType(d.clientType),
@@ -638,7 +730,8 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
           billingAddress: {
             addressLine1: d.address || d.addressLine1 || '',
             city: d.city || '',
-            state: d.state || '',
+            state,
+            stateCode,
             pincode: d.postalCode || d.pincode || '',
             country: d.country || 'India',
           },
@@ -658,7 +751,7 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
         businessSnapshot,
         clientId: client._id,
         clientSnapshot,
-        receiptDate: d.issueDate ? new Date(d.issueDate) : new Date(),
+        receiptDate: parseFlexibleDate(d.issueDate) || new Date(),
         paymentRecords: [{
           paymentMethod: d.paymentMethod ? d.paymentMethod.toUpperCase() : 'BANK_TRANSFER',
           amountReceived: receiptAmount,
@@ -728,6 +821,7 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
       }
 
       if (!client && autoCreateClients && rec.clientName) {
+        const { state, stateCode } = resolveStateAndCode(d.state, d.gstin);
         client = await Client.create({
           businessId,
           clientType: 'BUSINESS',
@@ -739,7 +833,8 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
           billingAddress: {
             addressLine1: d.address || d.addressLine1 || '',
             city: d.city || '',
-            state: d.state || '',
+            state,
+            stateCode,
             pincode: d.postalCode || d.pincode || '',
             country: d.country || 'India',
           },
@@ -773,8 +868,8 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
         clientId: client._id,
         documentType: importType,
         documentNumber: rec.documentNumber,
-        issueDate: d.issueDate ? new Date(d.issueDate) : new Date(),
-        validTill: d.validTill && !isNaN(Date.parse(d.validTill)) ? new Date(d.validTill) : undefined,
+        issueDate: parseFlexibleDate(d.issueDate) || new Date(),
+        validTill: parseFlexibleDate(d.validTill) || undefined,
         poNumber: d.poNumber || '',
         clientSnapshot,
         businessSnapshot,

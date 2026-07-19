@@ -57,6 +57,17 @@ const deleteClient = asyncHandler(async (req, res) => {
   res.json({ success: true, data: { message: 'Client deleted successfully' } });
 });
 
+/** POST /api/clients/bulk-delete */
+const bulkDeleteClients = asyncHandler(async (req, res) => {
+  const businessId = await getBusinessId(req.user._id);
+  const { ids } = req.body;
+  if (!ids || !Array.isArray(ids)) {
+    throw ApiError.badRequest('Client IDs array is required');
+  }
+  const result = await clientService.bulkDelete(ids, businessId, req.user._id);
+  res.json({ success: true, data: result });
+});
+
 /** GET /api/clients/:id/summary */
 const getClientSummary = asyncHandler(async (req, res) => {
   const businessId = await getBusinessId(req.user._id);
@@ -70,5 +81,6 @@ module.exports = {
   createClient,
   updateClient,
   deleteClient,
+  bulkDeleteClients,
   getClientSummary,
 };

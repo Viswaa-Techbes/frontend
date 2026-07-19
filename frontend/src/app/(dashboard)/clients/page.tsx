@@ -45,6 +45,12 @@ export default function ClientsPage() {
   // Loading states
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
+  // Bulk actions states
+  const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+  const [deleteReport, setDeleteReport] = useState<{ deletedCount: number; failures: any[] } | null>(null);
+
   // Fetch clients
   const fetchClients = async () => {
     setLoading(true);
@@ -60,6 +66,7 @@ export default function ClientsPage() {
       if (response.data?.success) {
         setClients(response.data.data.clients || []);
         setTotalPages(response.data.data.pagination?.totalPages || 1);
+        setSelectedClientIds([]); // clear selection when data changes
       }
     } catch (err: any) {
       showToast(err.response?.data?.message || 'Failed to load clients list.', 'error');
@@ -75,6 +82,45 @@ export default function ClientsPage() {
 
     return () => clearTimeout(delayDebounceFn);
   }, [search, activeTab, stateFilter, page]);
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedClientIds(clients.map(c => c._id));
+    } else {
+      setSelectedClientIds([]);
+    }
+  };
+
+  const handleSelectClient = (clientId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedClientIds(prev => [...prev, clientId]);
+    } else {
+      setSelectedClientIds(prev => prev.filter(id => id !== clientId));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setBulkDeleteLoading(true);
+    try {
+      const response = await api.post('/clients/bulk-delete', { ids: selectedClientIds });
+      if (response.data?.success) {
+        const { deletedCount, failures } = response.data.data;
+        if (failures && failures.length > 0) {
+          setDeleteReport({ deletedCount, failures });
+          showToast(`Bulk delete processed. Deleted: ${deletedCount}, Failed: ${failures.length}`, 'warning');
+        } else {
+          showToast(`Successfully deleted ${deletedCount} client(s).`, 'success');
+          setIsDeleteModalOpen(false);
+          setSelectedClientIds([]);
+        }
+        fetchClients();
+      }
+    } catch (err: any) {
+      showToast(err.response?.data?.message || 'Failed to delete selected clients.', 'error');
+    } finally {
+      setBulkDeleteLoading(false);
+    }
+  };
 
   // Toggle client status (Active <-> Inactive)
   const handleToggleStatus = async (client: ClientType) => {
@@ -154,6 +200,27 @@ export default function ClientsPage() {
         </button>
       </div>
 
+      {/* Selected Items Action Bar */}
+      {selectedClientIds.length > 0 && (
+        <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-xl flex items-center justify-between gap-3 animate-fadeIn text-xs text-indigo-900 font-semibold shadow-xs">
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-indigo-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>{selectedClientIds.length} client{selectedClientIds.length > 1 ? 's' : ''} selected</span>
+          </div>
+          <button
+            onClick={() => setIsDeleteModalOpen(true)}
+            className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold shadow-sm transition-colors flex items-center gap-1.5"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Delete Selected
+          </button>
+        </div>
+      )}
+
       {/* Client Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3 items-center bg-white p-2 rounded-xl border border-slate-200 shadow-xs">
         <div className="relative flex-1 w-full">
@@ -230,6 +297,14 @@ export default function ClientsPage() {
               <table className="w-full border-collapse text-left text-xs">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500 font-semibold bg-slate-50">
+                    <th className="px-6 py-3.5 w-12 text-center">
+                      <input
+                        type="checkbox"
+                        checked={clients.length > 0 && selectedClientIds.length === clients.length}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                        className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                      />
+                    </th>
                     <th className="px-6 py-3.5">Client / Business</th>
                     <th className="px-6 py-3.5">Contact Person</th>
                     <th className="px-6 py-3.5">Phone</th>
@@ -244,6 +319,14 @@ export default function ClientsPage() {
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {clients.map((client) => (
                     <tr key={client._id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-4 w-12 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedClientIds.includes(client._id)}
+                          onChange={(e) => handleSelectClient(client._id, e.target.checked)}
+                          className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                        />
+                      </td>
                       <td className="px-6 py-4 font-semibold text-slate-900">
                         {client.clientType === 'BUSINESS' ? (
                           <span>{client.businessName || client.clientName}</span>
@@ -367,6 +450,84 @@ export default function ClientsPage() {
           )}
         </div>
       )}
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          if (!bulkDeleteLoading) {
+            setIsDeleteModalOpen(false);
+            setDeleteReport(null);
+          }
+        }}
+        title={deleteReport ? "Bulk Delete Results" : "Confirm Bulk Delete"}
+        footer={
+          deleteReport ? (
+            <button
+              onClick={() => {
+                setIsDeleteModalOpen(false);
+                setDeleteReport(null);
+                setSelectedClientIds([]);
+              }}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-colors"
+            >
+              Close
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                disabled={bulkDeleteLoading}
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={bulkDeleteLoading}
+                onClick={handleBulkDelete}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {bulkDeleteLoading && (
+                  <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                )}
+                Confirm Delete
+              </button>
+            </div>
+          )
+        }
+      >
+        {deleteReport ? (
+          <div className="space-y-4">
+            <div className="p-3 bg-emerald-50 text-emerald-800 rounded-xl text-xs font-semibold border border-emerald-100">
+              Successfully deleted {deleteReport.deletedCount} client(s).
+            </div>
+            {deleteReport.failures.length > 0 && (
+              <div className="space-y-2">
+                <span className="block text-xs font-bold text-rose-700">Failed Deletions ({deleteReport.failures.length}):</span>
+                <div className="max-h-48 overflow-y-auto space-y-1.5 border border-slate-100 rounded-lg p-2 bg-slate-50/50">
+                  {deleteReport.failures.map((f, index) => (
+                    <div key={index} className="text-xs p-2 bg-white border border-rose-100 rounded-md text-slate-700 flex flex-col gap-1">
+                      <span className="font-bold text-slate-900">{f.name || 'Unknown Client'}</span>
+                      <span className="text-rose-600 font-medium">{f.reason}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-500">
+              Are you sure you want to delete the <strong>{selectedClientIds.length}</strong> selected client(s)?
+            </p>
+            <p className="text-[11px] text-rose-500 font-medium bg-rose-50 border border-rose-100 p-2.5 rounded-lg">
+              WARNING: This action is permanent and cannot be undone. Any clients with linked invoices or documents will not be deleted to preserve database integrity.
+            </p>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

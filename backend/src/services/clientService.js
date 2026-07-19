@@ -1,4 +1,5 @@
 const Client = require('../models/Client');
+const SalesDocument = require('../models/SalesDocument');
 const ApiError = require('../utils/ApiError');
 const { parsePagination, paginationMeta } = require('../utils/helpers');
 
@@ -132,4 +133,54 @@ const getSummary = async (id, businessId) => {
   };
 };
 
-module.exports = { list, getById, create, update, softDelete, getSummary };
+/**
+ * Bulk delete clients scoped to the current business.
+ * Checks for existing linked documents to prevent orphans.
+ */
+const bulkDelete = async (ids, businessId, userId) => {
+  const successIds = [];
+  const failures = [];
+
+  for (const id of ids) {
+    try {
+      const client = await Client.findOne({ _id: id, businessId, isDeleted: false });
+      if (!client) {
+        failures.push({
+          id,
+          name: 'Unknown',
+          reason: 'Client not found or already deleted',
+        });
+        continue;
+      }
+
+      // Check for existing SalesDocuments linked to this client
+      const docCount = await SalesDocument.countDocuments({ clientId: id });
+      if (docCount > 0) {
+        failures.push({
+          id,
+          name: client.clientName,
+          reason: `Cannot delete client '${client.clientName}' because they have ${docCount} linked sales document(s). Set to INACTIVE instead.`,
+        });
+        continue;
+      }
+
+      // Perform hard-delete as required ("Remove them from MongoDB")
+      await Client.deleteOne({ _id: id });
+      successIds.push(id);
+    } catch (err) {
+      failures.push({
+        id,
+        name: 'Error',
+        reason: err.message,
+      });
+    }
+  }
+
+  return {
+    deletedCount: successIds.length,
+    successIds,
+    failures,
+  };
+};
+
+module.exports = { list, getById, create, update, softDelete, bulkDelete, getSummary };

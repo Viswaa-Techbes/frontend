@@ -1090,6 +1090,7 @@ module.exports = {
   getDocuments,
   getDocumentById,
   updateDocument,
+  deleteDocument,
   updateDocumentStatus,
   calculateDocumentTotals,
   duplicateDocument,
