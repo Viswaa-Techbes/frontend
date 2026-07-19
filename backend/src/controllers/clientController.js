@@ -28,14 +28,14 @@ const listClients = asyncHandler(async (req, res) => {
 const getClient = asyncHandler(async (req, res) => {
   const businessId = await getBusinessId(req.user._id);
   const client = await clientService.getById(req.params.id, businessId);
-  res.json({ success: true, data: { client } });
+  res.json({ success: true, data: client });
 });
 
 /** POST /api/clients */
 const createClient = asyncHandler(async (req, res) => {
   const businessId = await getBusinessId(req.user._id);
   const client = await clientService.create(businessId, req.user._id, req.body);
-  res.status(201).json({ success: true, data: { client } });
+  res.status(201).json({ success: true, data: client });
 });
 
 /** PUT /api/clients/:id */
@@ -47,7 +47,7 @@ const updateClient = asyncHandler(async (req, res) => {
     req.user._id,
     req.body
   );
-  res.json({ success: true, data: { client } });
+  res.json({ success: true, data: client });
 });
 
 /** DELETE /api/clients/:id */
@@ -72,7 +72,7 @@ const bulkDeleteClients = asyncHandler(async (req, res) => {
 const getClientSummary = asyncHandler(async (req, res) => {
   const businessId = await getBusinessId(req.user._id);
   const summary = await clientService.getSummary(req.params.id, businessId);
-  res.json({ success: true, data: { summary } });
+  res.json({ success: true, data: summary });
 });
 
 module.exports = {

@@ -464,7 +464,7 @@ export default function DataImportPage() {
                       type="file"
                       accept=".xlsx,.xls,.csv"
                       onChange={handleFileChange}
-                      className="hidden"
+                      className="block text-xs my-2"
                     />
                   </label>
                 </div>

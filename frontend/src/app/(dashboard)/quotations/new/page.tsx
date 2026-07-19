@@ -682,7 +682,7 @@ function NewQuotationForm() {
     try {
       const response = await api.post('/clients', newClient);
       if (response.data?.success) {
-        const saved = response.data.data.client;
+        const saved = response.data.data.client || response.data.data;
         showToast('Client created successfully!', 'success');
         setIsClientModalOpen(false);
 

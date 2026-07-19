@@ -684,12 +684,13 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
     }
   } else if (importType === 'CLIENT') {
     for (const rec of importableList) {
+      const d = rec.data;
       const { state, stateCode } = resolveStateAndCode(d.state, d.gstin);
       await Client.create({
         businessId,
         clientType: getNormalizedClientType(d.clientType),
         clientName: d.clientName,
-        companyName: d.companyName || '',
+        businessName: d.companyName || d.businessName || '',
         email: d.email || '',
         phone: d.phone || '',
         gstin: d.gstin || '',
@@ -722,7 +723,7 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
           businessId,
           clientType: getNormalizedClientType(d.clientType),
           clientName: d.clientName,
-          companyName: d.companyName || '',
+          businessName: d.companyName || d.businessName || '',
           email: d.email || '',
           phone: d.phone || '',
           gstin: d.gstin || '',
@@ -826,7 +827,7 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
           businessId,
           clientType: 'BUSINESS',
           clientName: rec.clientName,
-          companyName: d.companyName || '',
+          businessName: d.companyName || d.businessName || '',
           email: d.email || '',
           phone: d.phone || '',
           gstin: d.gstin || '',
