@@ -1859,7 +1859,7 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
                               min={0.0001}
                               step="any"
                               onChange={(e) => handleUpdateItemRow(i, { quantity: Math.max(0.0001, parseFloat(e.target.value) || 0) })}
-                              className="w-full form-input text-xs text-slate-900 bg-white"
+                              className="w-full form-input text-xs text-slate-900 bg-white qty-input"
                             />
                           </td>
                         )}

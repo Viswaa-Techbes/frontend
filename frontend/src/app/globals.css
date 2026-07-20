@@ -862,4 +862,32 @@ body {
   font-weight: 700 !important;
 }
 
+/* Quantity Input Styling: centers value, maintains spinner, ensures contrast & visibility */
+.qty-input {
+  text-align: center !important;
+  padding-left: 0.375rem !important;
+  padding-right: 1.25rem !important; /* Prevent text overlap with spinner on the right */
+  color: #0f172a !important; /* High contrast text color */
+  font-weight: 500 !important;
+  background-color: #ffffff !important;
+  min-width: 65px !important; /* Ensure input remains wide enough for content */
+}
+
+/* Keep the up/down spinner visible in Chrome, Safari, Edge, Opera */
+.qty-input::-webkit-outer-spin-button,
+.qty-input::-webkit-inner-spin-button {
+  margin: 0 !important;
+  opacity: 1 !important;
+  display: block !important;
+}
+
+/* Disabled state styling for quantity inputs */
+.qty-input:disabled {
+  background-color: #f1f5f9 !important;
+  color: #64748b !important;
+  cursor: not-allowed;
+}
+
+
+
 

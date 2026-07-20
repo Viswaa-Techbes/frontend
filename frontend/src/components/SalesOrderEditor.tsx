@@ -961,7 +961,7 @@ export default function SalesOrderEditor({ initialId }: SalesOrderEditorProps) {
                             type="number"
                             value={item.quantity || ''}
                             onChange={(e) => handleItemLineChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
-                            className="w-full form-input text-xs text-right"
+                            className="w-full form-input text-xs text-right qty-input"
                           />
                         </td>
 

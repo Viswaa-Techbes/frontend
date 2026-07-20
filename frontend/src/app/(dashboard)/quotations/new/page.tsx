@@ -1260,7 +1260,7 @@ function NewQuotationForm() {
                               step={1}
                               value={item.quantity}
                               onChange={(e) => handleItemFieldChange(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                              className="w-full form-input text-xs text-center border-slate-200 font-mono"
+                              className="w-full form-input text-xs text-center border-slate-200 font-mono qty-input"
                             />
                           </td>
 

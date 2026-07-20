@@ -991,7 +991,7 @@ export default function CreditNoteEditor({ initialId }: CreditNoteEditorProps) {
                             type="number"
                             value={item.quantity || ''}
                             onChange={(e) => handleItemLineChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
-                            className="w-full form-input text-xs text-right bg-white text-slate-900"
+                            className="w-full form-input text-xs text-right bg-white text-slate-900 qty-input"
                           />
                         </td>
 

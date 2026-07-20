@@ -746,7 +746,7 @@ export default function EditQuotationPage() {
                               step="any"
                               value={item.quantity}
                               onChange={(e) => handleItemFieldChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
-                              className="w-full form-input text-xs py-1 text-center"
+                              className="w-full form-input text-xs py-1 text-center qty-input"
                             />
                           </td>
                           <td className="p-3">
