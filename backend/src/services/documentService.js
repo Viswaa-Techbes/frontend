@@ -7,6 +7,30 @@ const { toIndianWords } = require('../utils/numberToWords');
 const { DOCUMENT_PREFIX } = require('../utils/constants');
 const normalizeDocumentNumber = (value) => (typeof value === 'string' ? value.trim() : '');
 
+const mapDocumentResponse = (doc) => {
+  if (!doc) return doc;
+  const rawDoc = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+  
+  // Safe default calculations
+  const totalVal = Number(rawDoc.grandTotal ?? 0);
+  const subtotalVal = Number(rawDoc.subtotal ?? 0);
+  const amountPaidVal = Number(rawDoc.amountPaid ?? 0);
+  const balanceVal = rawDoc.balanceDue !== undefined && rawDoc.balanceDue !== null 
+    ? Number(rawDoc.balanceDue) 
+    : Math.max(0, totalVal - amountPaidVal);
+
+  return {
+    ...rawDoc,
+    total: totalVal,
+    subtotal: subtotalVal,
+    grandTotal: totalVal,
+    balance: balanceVal,
+    amountPaid: amountPaidVal,
+    invoiceDate: rawDoc.issueDate || rawDoc.createdAt || null,
+    dueDate: rawDoc.validTill || rawDoc.dueDate || null,
+  };
+};
+
 const ensureUniqueDocumentNumber = async (businessId, documentType, documentNumber, excludeId = null) => {
   const normalizedNumber = normalizeDocumentNumber(documentNumber);
   if (!normalizedNumber) {
@@ -516,7 +540,7 @@ const getDocuments = async (userId, query) => {
   ]);
 
   return {
-    documents,
+    documents: documents.map(mapDocumentResponse),
     pagination: {
       total,
       page,
@@ -540,7 +564,7 @@ const getDocumentById = async (id, userId) => {
     throw ApiError.notFound('Document not found.');
   }
 
-  return document;
+  return mapDocumentResponse(document);
 };
 
 /**

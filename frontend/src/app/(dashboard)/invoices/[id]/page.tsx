@@ -281,7 +281,7 @@ export default function InvoiceDetailsPage({ params }: InvoiceDetailsProps) {
       setIsShareModalOpen(false);
     } else {
       const phone = document?.clientSnapshot?.phone || '';
-      const text = encodeURIComponent(`Hi ${document?.clientSnapshot?.clientName || ''}, please review Tax Invoice ${document?.documentNumber} for amount ₹${document?.grandTotal?.toLocaleString('en-IN')}`);
+      const text = encodeURIComponent(`Hi ${document?.clientSnapshot?.clientName || ''}, please review Tax Invoice ${document?.documentNumber} for amount ₹${Number(document?.grandTotal ?? 0).toLocaleString('en-IN')}`);
       window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${text}`, '_blank');
       showToast('WhatsApp share window opened.', 'success');
     }
@@ -478,7 +478,7 @@ export default function InvoiceDetailsPage({ params }: InvoiceDetailsProps) {
           </div>
           <div>
             <span className="block font-semibold text-slate-450">Dates:</span>
-            <span>Issue: {new Date(document.issueDate).toLocaleDateString('en-IN')} | Due: {new Date(document.validTill).toLocaleDateString('en-IN')}</span>
+            <span>Issue: {document.issueDate && !isNaN(new Date(document.issueDate).getTime()) ? new Date(document.issueDate).toLocaleDateString('en-IN') : '—'} | Due: {document.validTill && !isNaN(new Date(document.validTill).getTime()) ? new Date(document.validTill).toLocaleDateString('en-IN') : '—'}</span>
           </div>
           <div>
             <span className="block font-semibold text-slate-455">Payment status:</span>
@@ -489,7 +489,7 @@ export default function InvoiceDetailsPage({ params }: InvoiceDetailsProps) {
           <div>
             <span className="block font-semibold text-slate-450">Balance due:</span>
             <span className="font-bold text-slate-900 text-sm">
-              ₹{(document.balanceDue ?? document.grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              ₹{Number(document.balanceDue ?? document.grandTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
             </span>
           </div>
         </div>
@@ -701,9 +701,9 @@ export default function InvoiceDetailsPage({ params }: InvoiceDetailsProps) {
                           <td style={{ textAlign: 'right' }}>
                             {item.quantity} {localSettings.advanced.unitDisplay === 'Separate column' ? (item.unit || 'PCS') : ''}
                           </td>
-                          <td style={{ textAlign: 'right' }}>₹{item.rate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          <td style={{ textAlign: 'right' }}>₹{Number(item.rate ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           <td className="item-amount">
-                            ₹{((item.quantity * item.rate) - (item.itemDiscountAmount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            ₹{Number(((item.quantity ?? 0) * (item.rate ?? 0)) - (item.itemDiscountAmount ?? 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                           </td>
                         </tr>
                       );
@@ -752,12 +752,12 @@ export default function InvoiceDetailsPage({ params }: InvoiceDetailsProps) {
                   <div className="invoice-doc-totals-rows">
                     <div className="invoice-doc-total-row">
                       <span>Subtotal</span>
-                      <span>₹{document.subtotal?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      <span>₹{Number(document.subtotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
                     {document.documentDiscountAmount > 0 && (
                       <div className="invoice-doc-total-row">
                         <span>Discount</span>
-                        <span>− ₹{document.documentDiscountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        <span>− ₹{Number(document.documentDiscountAmount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                       </div>
                     )}
                     {document.gstConfiguration?.gstEnabled && (
@@ -765,19 +765,19 @@ export default function InvoiceDetailsPage({ params }: InvoiceDetailsProps) {
                         {document.cgstTotal > 0 && (
                           <div className="invoice-doc-total-row">
                             <span>CGST</span>
-                            <span>₹{document.cgstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            <span>₹{Number(document.cgstTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                           </div>
                         )}
                         {document.sgstTotal > 0 && (
                           <div className="invoice-doc-total-row">
                             <span>SGST</span>
-                            <span>₹{document.sgstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            <span>₹{Number(document.sgstTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                           </div>
                         )}
                         {document.igstTotal > 0 && (
                           <div className="invoice-doc-total-row">
                             <span>IGST</span>
-                            <span>₹{document.igstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            <span>₹{Number(document.igstTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                           </div>
                         )}
                       </>
@@ -785,7 +785,7 @@ export default function InvoiceDetailsPage({ params }: InvoiceDetailsProps) {
                     {document.additionalChargesTotal > 0 && (
                       <div className="invoice-doc-total-row">
                         <span>Shipping &amp; Charges</span>
-                        <span>₹{document.additionalChargesTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        <span>₹{Number(document.additionalChargesTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                       </div>
                     )}
                     {document.roundOff !== 0 && (
@@ -797,28 +797,28 @@ export default function InvoiceDetailsPage({ params }: InvoiceDetailsProps) {
                   </div>
                   <div className="invoice-doc-grand-total">
                     <span className="invoice-doc-grand-total-label">Grand Total</span>
-                    <span className="invoice-doc-grand-total-value">₹{document.grandTotal?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    <span className="invoice-doc-grand-total-value">₹{Number(document.grandTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                   </div>
                   {document.documentType === 'INVOICE' && (
                     <div className="p-3 bg-slate-50 border-t border-slate-200 text-xs space-y-1.5 print:bg-slate-50/50 print-avoid-break">
                       <div className="flex justify-between text-slate-600">
                         <span>Amount Paid:</span>
-                        <span className="font-semibold text-slate-800">₹{(document.amountPaid || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        <span className="font-semibold text-slate-800">₹{Number(document.amountPaid ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                       </div>
                       <div className="flex justify-between text-slate-600">
                         <span>Remaining Balance:</span>
-                        <span className="font-bold text-amber-700">₹{(document.balanceDue !== undefined ? document.balanceDue : document.grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        <span className="font-bold text-amber-700">₹{Number(document.balanceDue ?? document.grandTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                       </div>
                       <div className="flex justify-between items-center text-slate-600 pt-1 border-t border-slate-200">
                         <span>Payment Status:</span>
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          (document.balanceDue !== undefined ? document.balanceDue : document.grandTotal) === 0 
+                          Number(document.balanceDue ?? document.grandTotal ?? 0) === 0 
                             ? 'bg-emerald-100 text-emerald-800' 
                             : (document.amountPaid || 0) > 0 
                               ? 'bg-amber-100 text-amber-800' 
                               : 'bg-rose-100 text-rose-800'
                         }`}>
-                          {(document.balanceDue !== undefined ? document.balanceDue : document.grandTotal) === 0 
+                          {Number(document.balanceDue ?? document.grandTotal ?? 0) === 0 
                             ? 'Paid' 
                             : (document.amountPaid || 0) > 0 
                               ? 'Partially Paid' 
@@ -887,12 +887,12 @@ export default function InvoiceDetailsPage({ params }: InvoiceDetailsProps) {
                 {document.payments.map((pay: any, index: number) => (
                   <div key={index} className="flex justify-between py-2.5 items-center">
                     <div>
-                      <p className="font-bold text-slate-800">₹{pay.amount.toLocaleString('en-IN')} via {pay.paymentMode}</p>
+                      <p className="font-bold text-slate-800">₹{Number(pay.amount ?? 0).toLocaleString('en-IN')} via {pay.paymentMode}</p>
                       {pay.referenceNumber && <p className="text-[10px] text-slate-400 font-mono">Ref: {pay.referenceNumber}</p>}
                       {pay.notes && <p className="text-[10px] text-slate-500 italic">Note: {pay.notes}</p>}
                     </div>
                     <span className="text-slate-500 font-medium">
-                      {new Date(pay.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      {pay.paymentDate && !isNaN(new Date(pay.paymentDate).getTime()) ? new Date(pay.paymentDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                     </span>
                   </div>
                 ))}
@@ -1065,7 +1065,7 @@ export default function InvoiceDetailsPage({ params }: InvoiceDetailsProps) {
                       document.acceptanceHistory.map((hist: any, i: number) => (
                         <div key={i} className="border-b border-slate-100 pb-1.5 text-[10px]">
                           <p className="font-bold text-slate-900">Status: {hist.status}</p>
-                          <p className="text-slate-450">{new Date(hist.timestamp).toLocaleString('en-IN')}</p>
+                          <p className="text-slate-455">{hist.timestamp && !isNaN(new Date(hist.timestamp).getTime()) ? new Date(hist.timestamp).toLocaleString('en-IN') : '—'}</p>
                         </div>
                       ))
                     )}
@@ -1091,7 +1091,7 @@ export default function InvoiceDetailsPage({ params }: InvoiceDetailsProps) {
                         <div key={i} className="border-b border-slate-100 pb-1.5 text-[10px]">
                           <p className="font-bold text-slate-900">{log.action}</p>
                           <p className="text-slate-550">{log.description}</p>
-                          <p className="text-slate-455">By {log.userName} at {new Date(log.timestamp).toLocaleString('en-IN')}</p>
+                          <p className="text-slate-455">By {log.userName || 'System'} at {log.timestamp && !isNaN(new Date(log.timestamp).getTime()) ? new Date(log.timestamp).toLocaleString('en-IN') : '—'}</p>
                         </div>
                       ))
                     )}

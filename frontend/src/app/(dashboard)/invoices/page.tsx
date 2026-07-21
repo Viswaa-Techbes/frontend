@@ -70,7 +70,25 @@ export default function InvoicesPage() {
         if (paymentStatusFilter) {
           list = list.filter((item: any) => item.paymentStatus === paymentStatusFilter);
         }
-        setInvoices(list);
+
+        // Validate and filter out corrupt document records, logging the issue gracefully
+        const validList = list.filter((inv: any) => {
+          if (!inv || typeof inv !== 'object') {
+            console.warn('[Invoice List] Skipping corrupt non-object record:', inv);
+            return false;
+          }
+          if (!inv._id) {
+            console.warn('[Invoice List] Skipping record missing _id:', inv);
+            return false;
+          }
+          if (!inv.documentNumber) {
+            console.warn(`[Invoice List] Skipping record ID ${inv._id} missing documentNumber:`, inv);
+            return false;
+          }
+          return true;
+        });
+
+        setInvoices(validList);
         setTotalPages(response.data.data.pagination?.totalPages || 1);
       }
     } catch (err: any) {
@@ -339,14 +357,18 @@ export default function InvoicesPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-slate-600">
-                        {new Date(invoice.issueDate).toLocaleDateString('en-IN', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric'
-                        })}
+                        {invoice.issueDate && !isNaN(new Date(invoice.issueDate).getTime()) ? (
+                          new Date(invoice.issueDate).toLocaleDateString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric'
+                          })
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-slate-600">
-                        {invoice.validTill ? (
+                        {invoice.validTill && !isNaN(new Date(invoice.validTill).getTime()) ? (
                           new Date(invoice.validTill).toLocaleDateString('en-IN', {
                             day: '2-digit',
                             month: 'short',
@@ -357,13 +379,13 @@ export default function InvoicesPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 font-bold text-slate-900">
-                        ₹{invoice.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        ₹{Number(invoice.grandTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="px-6 py-4 text-slate-600">
-                        ₹{invoice.amountPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        ₹{Number(invoice.amountPaid ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="px-6 py-4 font-bold text-slate-900">
-                        ₹{invoice.balanceDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        ₹{Number(invoice.balanceDue ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="px-6 py-4">
                         {getPaymentStatusBadge(invoice.paymentStatus)}

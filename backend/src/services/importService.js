@@ -886,6 +886,12 @@ const executeImport = async (businessId, userId, importType, rows, columnMapping
         importSource: 'EXCEL',
       };
 
+      if (importType === 'INVOICE') {
+        docData.amountPaid = 0;
+        docData.balanceDue = calcs.grandTotal;
+        docData.paymentStatus = 'UNPAID';
+      }
+
       if (importType === 'CREDIT_NOTE' && linkedInvoice) {
         docData.linkedInvoiceId = linkedInvoice._id;
         docData.linkedInvoiceSnapshot = linkedInvoice.toObject();

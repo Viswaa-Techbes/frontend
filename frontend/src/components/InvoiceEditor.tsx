@@ -1878,10 +1878,10 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
                         )}
 
                         {columnVisibility.amount && (
-                          <td className="px-3 py-3 align-top font-semibold text-slate-900 pt-5">
-                            ₹{(item.quantity * item.rate).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
-                        )}
+                           <td className="px-3 py-3 align-top font-semibold text-slate-900 pt-5">
+                             ₹{Number((item.quantity ?? 0) * (item.rate ?? 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                           </td>
+                         )}
 
                         {/* Actions */}
                         <td className="px-3 py-3 text-right align-top pt-4">
@@ -2127,7 +2127,7 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
                   <span className="font-semibold text-slate-900">
-                    ₹{calculated.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    ₹{Number(calculated.subtotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
 
@@ -2164,7 +2164,7 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
                   {enableDocDiscount && calculated.documentDiscountAmount > 0 && (
                     <div className="flex justify-between text-xs text-slate-500 pl-6">
                       <span>Discount Total:</span>
-                      <span>- ₹{calculated.documentDiscountAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      <span>- ₹{Number(calculated.documentDiscountAmount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
                   )}
                 </div>
@@ -2253,19 +2253,19 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
                     {calculated.cgstTotal > 0 && (
                       <div className="flex justify-between">
                         <span>CGST total:</span>
-                        <span>₹{calculated.cgstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        <span>₹{Number(calculated.cgstTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                       </div>
                     )}
                     {calculated.sgstTotal > 0 && (
                       <div className="flex justify-between">
                         <span>SGST total:</span>
-                        <span>₹{calculated.sgstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        <span>₹{Number(calculated.sgstTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                       </div>
                     )}
                     {calculated.igstTotal > 0 && (
                       <div className="flex justify-between">
                         <span>IGST total:</span>
-                        <span>₹{calculated.igstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        <span>₹{Number(calculated.igstTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                       </div>
                     )}
                   </div>
@@ -2287,7 +2287,7 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
 
                 <div className="flex justify-between border-t border-slate-200 pt-3 text-sm font-black text-slate-900">
                   <span>Grand Total (INR):</span>
-                  <span>₹{calculated.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  <span>₹{Number(calculated.grandTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>
@@ -2415,7 +2415,7 @@ export default function InvoiceEditor({ mode, documentId }: InvoiceEditorProps) 
                 </div>
                 <div>
                   <p className="font-semibold text-slate-500 uppercase tracking-wider mb-1">Amount</p>
-                  <p className="font-black text-slate-900">₹{calculated.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
+                  <p className="font-black text-slate-900">₹{Number(calculated.grandTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
                 </div>
               </div>
               {terms && <p className="text-slate-500">Terms: {terms}</p>}

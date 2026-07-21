@@ -296,6 +296,19 @@ const salesDocumentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Pre-save hook to ensure amountPaid and balanceDue are populated
+salesDocumentSchema.pre('save', function (next) {
+  if (this.documentType === 'INVOICE') {
+    if (this.amountPaid === undefined || this.amountPaid === null) {
+      this.amountPaid = 0;
+    }
+    if (this.balanceDue === undefined || this.balanceDue === null) {
+      this.balanceDue = Math.max(0, (this.grandTotal || 0) - this.amountPaid);
+    }
+  }
+  next();
+});
+
 // Indexes
 salesDocumentSchema.index({ businessId: 1, documentType: 1, createdAt: -1 });
 salesDocumentSchema.index({ businessId: 1, documentType: 1, documentNumber: 1 }, { unique: true });
